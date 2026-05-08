@@ -64,10 +64,10 @@ def root():
     return {"status": "ok", "app": "WR Gestionale"}
 
 @app.post("/auth/google")
-async def google_auth(req: GoogleAuthRequest):
-    async with httpx.AsyncClient() as client_http:
+async with httpx.AsyncClient() as client_http:
         r = await client_http.get(
-            f"https://oauth2.googleapis.com/tokeninfo?id_token={req.token}"
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {req.token}"}
         )
         if r.status_code != 200:
             raise HTTPException(status_code=401, detail="Token Google non valido")

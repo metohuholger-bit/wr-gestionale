@@ -64,7 +64,8 @@ def root():
     return {"status": "ok", "app": "WR Gestionale"}
 
 @app.post("/auth/google")
-async with httpx.AsyncClient() as client_http:
+async def google_auth(req: GoogleAuthRequest):
+    async with httpx.AsyncClient() as client_http:
         r = await client_http.get(
             "https://www.googleapis.com/oauth2/v3/userinfo",
             headers={"Authorization": f"Bearer {req.token}"}

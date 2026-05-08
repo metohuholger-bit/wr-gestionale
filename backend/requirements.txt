@@ -5,3 +5,4 @@ httpx==0.25.2
 python-dotenv==1.0.0
 motor==3.3.2
 pydantic==1.10.13
+PyJWT==2.8.0

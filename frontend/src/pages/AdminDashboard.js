@@ -1,278 +1,169 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Routes, Route } from 'react-router-dom';
-import Layout from '../components/Layout';
-import axios from 'axios';
-import { useAuth } from '../context/AuthContext';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
-const NAV = [
-  {
-    title: 'Principale',
-    items: [
-      { to: '/admin', label: 'Dashboard', icon: '▦' },
-      { to: '/admin/pratiche', label: 'Pratiche', icon: '≡' },
-    ]
-  },
-  {
-    title: 'Gestione',
-    items: [
-      { to: '/admin/sub', label: 'Sub e squadre', icon: '◈' },
-      { to: '/admin/link', label: 'Link attivi', icon: '⊕' },
-      { to: '/admin/utenti', label: 'Utenti', icon: '⊙' },
-    ]
-  }
-];
+// Fix Leaflet icons
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
 
-function MappaSquadra({ wr, onClose }) {
-  const mapRef = useRef(null);
-  const mapInstanceRef = useRef(null);
-  const markersRef = useRef({});
-  const [search, setSearch] = useState('');
-  const [notFound, setNotFound] = useState(false);
+const ZoomToMarker = ({ position, zoomLevel }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (position) map.flyTo([position.lat, position.lon], zoomLevel || 14);
+  }, [position, map, zoomLevel]);
+  return null;
+};
 
-  const cercaWR = () => {
-    const q = search.trim();
-    if (!q || !mapInstanceRef.current) return;
-    const marker = markersRef.current[q];
-    if (marker) {
-      mapInstanceRef.current.setView(marker.getLatLng(), 15, { animate: true });
-      marker.openPopup();
-      setNotFound(false);
-    } else {
-      setNotFound(true);
+export default function AdminDashboard() {
+  const [stats, setStats] = useState({ total_wr: 0, old_90: 0, active_subs: 0 });
+  const [subList, setSubList] = useState([]);
+  const [selectedSub, setSelectedSub] = useState(null);
+  const [wrList, setWrList] = useState([]);
+  const [showMap, setShowMap] = useState(false);
+  const [mapMarkers, setMapMarkers] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filter90, setFilter90] = useState(false);
+  const [mapCenter, setMapCenter] = useState([42.5, 11.8]);
+  const token = localStorage.getItem('token');
+
+  const fetchStats = async () => {
+    const res = await fetch(`${process.env.REACT_APP_API_URL}/api/stats`, { headers: { Authorization: `Bearer ${token}` }});
+    setStats(await res.json());
+  };
+
+  const fetchSubs = async () => {
+    const res = await fetch(`${process.env.REACT_APP_API_URL}/api/wr?page=1&limit=1`, { headers: { Authorization: `Bearer ${token}` }});
+    const data = await res.json();
+    const uniqueSubs = [...new Set(data.data.map(r => r.Sq))].filter(Boolean);
+    setSubList(uniqueSubs);
+  };
+
+  const fetchWR = async (sq) => {
+    setSelectedSub(sq);
+    const res = await fetch(`${process.env.REACT_APP_API_URL}/api/wr?squadra=${sq}&limit=500`, { headers: { Authorization: `Bearer ${token}` }});
+    const json = await res.json();
+    setWrList(json.data || []);
+  };
+
+  const loadMapData = async () => {
+    const res = await fetch(`${process.env.REACT_APP_API_URL}/api/wr/map?squadra=${selectedSub}`, { headers: { Authorization: `Bearer ${token}` }});
+    setMapMarkers(await res.json());
+    setShowMap(true);
+  };
+
+  useEffect(() => {
+    fetchStats();
+    fetchSubs();
+  }, []);
+
+  const filteredWR = wrList.filter(r => {
+    const matchSearch = !searchTerm || r.WR?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                        r.Indirizzo?.toLowerCase().includes(searchTerm.toLowerCase());
+    if (filter90 && r.Datadispaccio) {
+      const d = r.Datadispaccio.split('/');
+      const date = new Date(`${d[2]}-${d[1]}-${d[0]}`);
+      const days = (new Date() - date) / (1000 * 60 * 60 * 24);
+      if (days <= 90) return false;
     }
-  };
-
-  useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
-    document.head.appendChild(link);
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
-    script.onload = () => {
-      const L = window.L;
-      const map = L.map(mapRef.current, { center: [42.5, 11.5], zoom: 8 });
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, opacity: 0.7 }).addTo(map);
-      const bounds = [];
-      wr.forEach(w => {
-        const lat = parseFloat(w.Latitudine);
-        const lon = parseFloat(w.Longitudine);
-        if (!lat || !lon || isNaN(lat) || isNaN(lon)) return;
-        const marker = L.circleMarker([lat, lon], { radius: 8, fillColor: '#3b82f6', color: 'white', weight: 2, fillOpacity: 0.9 })
-          .addTo(map)
-          .bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:#3b82f6">WR ${w.WR}</b><br/>${w.Indirizzo || ''}, ${w.Localita || ''}<br/>Stato: <b>${w.StatoWR || 'N/D'}</b><br/>${lat && lon ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}" target="_blank" style="color:#22c55e">📍 Indicazioni</a>` : ''}</div>`);
-        markersRef.current[String(w.WR)] = marker;
-        bounds.push([lat, lon]);
-      });
-      if (bounds.length > 0) map.fitBounds(bounds, { padding: [30, 30] });
-      mapInstanceRef.current = map;
-    };
-    document.head.appendChild(script);
-    return () => { if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; } };
-  }, [wr]);
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: '90vw', height: '85vh', background: 'var(--panel)', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)' }}>
-            Mappa — {wr.filter(w => w.Latitudine && w.Longitudine).length} punti su {wr.length} WR
-          </span>
-          <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', alignItems: 'center' }}>
-            <input
-              value={search}
-              onChange={e => { setSearch(e.target.value); setNotFound(false); }}
-              onKeyDown={e => e.key === 'Enter' && cercaWR()}
-              placeholder="Cerca WR..."
-              style={{ background: 'var(--bg)', border: `1px solid ${notFound ? 'var(--red)' : 'var(--border)'}`, color: 'var(--text)', padding: '5px 10px', borderRadius: 6, fontSize: 12, outline: 'none', width: 140 }}
-            />
-            <button onClick={cercaWR} style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--accent)', padding: '5px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
-              Cerca
-            </button>
-            {notFound && <span style={{ fontSize: 11, color: 'var(--red)' }}>Non trovata</span>}
-          </div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer' }}>×</button>
-        </div>
-        <div ref={mapRef} style={{ flex: 1 }} />
-      </div>
-    </div>
-  );
-}
-
-function PannelloWR({ squadra, wr, onClose }) {
-  const [showMappa, setShowMappa] = useState(false);
-  const [search, setSearch] = useState('');
-
-  const oggi = new Date();
-  const isOld = (d) => {
-    if (!d) return false;
-    const p = d.split('/');
-    if (p.length !== 3) return false;
-    return (oggi - new Date(p[2], p[1] - 1, p[0])) / (1000 * 60 * 60 * 24) > 90;
-  };
-
-  const filtered = wr.filter(w =>
-    !search || w.WR?.toString().includes(search) ||
-    w.Indirizzo?.toLowerCase().includes(search.toLowerCase()) ||
-    w.Localita?.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const conCoord = wr.filter(w => parseFloat(w.Latitudine) && parseFloat(w.Longitudine)).length;
-  const oltre90 = wr.filter(w => isOld(w.Datadispaccio)).length;
-
-  return (
-    <>
-      {showMappa && <MappaSquadra wr={wr} onClose={() => setShowMappa(false)} />}
-      <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: 420, background: 'var(--panel)', borderLeft: '1px solid var(--border)', zIndex: 500, display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.4)' }}>
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 14, fontWeight: 600, color: 'var(--accent)' }}>{squadra}</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-              {wr.length} WR totali
-              {oltre90 > 0 && <span style={{ color: 'var(--red)', marginLeft: 8 }}>⚠ {oltre90} oltre 90gg</span>}
-            </div>
-          </div>
-          <button onClick={() => setShowMappa(true)} style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', color: 'var(--green)', padding: '6px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
-            ◎ Mappa ({conCoord})
-          </button>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer' }}>×</button>
-        </div>
-        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca WR, indirizzo..." style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 10px', borderRadius: 6, fontSize: 12, outline: 'none' }} />
-        </div>
-        <div style={{ flex: 1, overflow: 'auto' }}>
-          {filtered.map((w, i) => {
-            const old = isOld(w.Datadispaccio);
-            const lat = parseFloat(w.Latitudine);
-            const lon = parseFloat(w.Longitudine);
-            return (
-              <div key={i} style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', borderLeft: old ? '3px solid var(--red)' : '3px solid transparent' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>WR {w.WR}</span>
-                  <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: old ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)', color: old ? 'var(--red)' : 'var(--green)' }}>
-                    {old ? '+90gg' : w.StatoWR || 'N/D'}
-                  </span>
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text)', marginBottom: 2 }}>{w.Indirizzo}{w.Localita ? `, ${w.Localita}` : ''}</div>
-                <div style={{ display: 'flex', gap: 12, fontSize: 10, color: 'var(--muted)' }}>
-                  <span>{w.Datadispaccio}</span>
-                  {w.Pali && <span>Pali: {w.Pali}</span>}
-                  {lat && lon && <a href={`https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`} target="_blank" rel="noreferrer" style={{ color: 'var(--green)' }}>📍 Nav</a>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </>
-  );
-}
-
-function DashboardHome() {
-  const { API } = useAuth();
-  const [wr, setWr] = useState([]);
-  const [squadre, setSquadre] = useState([]);
-  const [selectedSquadra, setSelectedSquadra] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/mini-squadre`)])
-      .then(([wrR, sqR]) => { setWr(wrR.data); setSquadre(sqR.data); })
-      .catch(() => {}).finally(() => setLoading(false));
-  }, [API]);
-
-  const oggi = new Date();
-  const isOld = (d) => {
-    if (!d) return false;
-    const p = d.split('/');
-    if (p.length !== 3) return false;
-    return (oggi - new Date(p[2], p[1] - 1, p[0])) / (1000 * 60 * 60 * 24) > 90;
-  };
-
-  const oltre90 = wr.filter(w => isOld(w.Datadispaccio)).length;
-
-  const subMap = {};
-  wr.forEach(w => {
-    const sq = w.Sq || 'N/D';
-    if (!subMap[sq]) subMap[sq] = [];
-    subMap[sq].push(w);
+    return matchSearch;
   });
 
-  const wrSquadra = selectedSquadra ? (subMap[selectedSquadra] || []) : [];
-
-  if (loading) return <div style={{ padding: 40, color: 'var(--muted)', textAlign: 'center' }}>Caricamento dati...</div>;
-
   return (
-    <div style={{ padding: '24px', paddingRight: selectedSquadra ? '460px' : '24px' }}>
-      {selectedSquadra && <PannelloWR squadra={selectedSquadra} wr={wrSquadra} onClose={() => setSelectedSquadra(null)} />}
-
-      <div style={{ fontSize: '18px', fontWeight: 500, marginBottom: '4px' }}>Dashboard</div>
-      <div style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '20px' }}>Panoramica di tutte le pratiche</div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '24px' }}>
-        {[
-          { label: 'WR totali', val: wr.length, color: 'var(--accent)' },
-          { label: 'Oltre 90gg', val: oltre90, color: oltre90 > 0 ? 'var(--red)' : 'var(--muted)' },
-          { label: 'Squadre/Sub', val: Object.keys(subMap).length, color: 'var(--green)' },
-          { label: 'Mini-squadre', val: squadre.length, color: 'var(--accent2)' },
-        ].map((s, i) => (
-          <div key={i} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: '10px', padding: '16px' }}>
-            <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>{s.label}</div>
-            <div style={{ fontSize: '28px', fontWeight: 500, color: s.color }}>{s.val}</div>
+    <div style={{ display: 'flex', height: '100vh', background: '#0f172a', color: '#e2e8f0' }}>
+      {/* Sidebar */}
+      <div style={{ width: 280, background: '#1e293b', padding: 16, borderRight: '1px solid #334155', overflowY: 'auto' }}>
+        <h2 style={{ color: '#38bdf8', marginBottom: 16 }}>📊 Dashboard</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 20 }}>
+          <div style={{ background: '#334155', padding: 10, borderRadius: 6, textAlign: 'center' }}>
+            <div style={{ fontSize: 20, fontWeight: 'bold' }}>{stats.total_wr}</div>
+            <div style={{ fontSize: 12 }}>WR Totali</div>
           </div>
+          <div style={{ background: '#334155', padding: 10, borderRadius: 6, textAlign: 'center', color: '#f87171' }}>
+            <div style={{ fontSize: 20, fontWeight: 'bold' }}>{stats.old_90}</div>
+            <div style={{ fontSize: 12 }}>+90gg</div>
+          </div>
+        </div>
+
+        <h3 style={{ marginTop: 8, marginBottom: 12 }}>Squadre / Sub</h3>
+        {subList.map(sq => (
+          <button key={sq} onClick={() => fetchWR(sq)} style={{
+            display: 'block', width: '100%', padding: '8px 12px', marginBottom: 6,
+            background: selectedSub === sq ? '#0ea5e9' : '#334155',
+            border: 'none', borderRadius: 4, color: '#fff', cursor: 'pointer', textAlign: 'left'
+          }}>
+            {sq}
+          </button>
         ))}
       </div>
 
-      <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--muted)', marginBottom: '10px' }}>
-        WR per squadra/sub — clicca per vedere le pratiche
-      </div>
-      <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ background: 'var(--bg)' }}>
-              {['Codice', 'Nome', 'WR', 'Oltre 90gg', 'Con coord'].map(h => (
-                <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '11px', color: 'var(--muted)', fontWeight: 500, borderBottom: '1px solid var(--border)' }}>{h}</th>
+      {/* Main Area */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {selectedSub && (
+          <div style={{ padding: 12, background: '#1e293b', borderBottom: '1px solid #334155', display: 'flex', gap: 12, alignItems: 'center' }}>
+            <h3 style={{ margin: 0 }}>{selectedSub} ({filteredWR.length} WR)</h3>
+            <input placeholder="Cerca WR o Indirizzo..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+              style={{ padding: 6, borderRadius: 4, border: '1px solid #475569', background: '#0f172a', color: '#fff', flex: 1 }} />
+            <button onClick={() => setFilter90(!filter90)} style={{
+              padding: '6px 12px', background: filter90 ? '#ef4444' : '#475569',
+              border: 'none', borderRadius: 4, color: '#fff', cursor: 'pointer'
+            }}>⚠ +90gg</button>
+            <button onClick={loadMapData} style={{ padding: '6px 12px', background: '#22c55e', border: 'none', borderRadius: 4, color: '#fff', cursor: 'pointer' }}>🗺 Mappa</button>
+          </div>
+        )}
+
+        {showMap ? (
+          <div style={{ flex: 1, position: 'relative' }}>
+            <button onClick={() => setShowMap(false)} style={{ position: 'absolute', top: 10, left: 10, zIndex: 1000, padding: '6px 10px', background: '#334155', border: 'none', borderRadius: 4, color: '#fff', cursor: 'pointer' }}>← Torna alla lista</button>
+            <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 1000, display: 'flex', gap: 8 }}>
+              <input placeholder="Cerca WR..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                style={{ padding: 6, borderRadius: 4, border: '1px solid #475569', background: '#0f172a', color: '#fff' }} />
+            </div>
+            <MapContainer center={mapCenter} zoom={9} style={{ height: '100%', width: '100%' }}>
+              <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
+              <ZoomToMarker position={mapCenter} />
+              {mapMarkers.filter(m => !searchTerm || m.wr.toLowerCase().includes(searchTerm.toLowerCase())).map((m, i) => (
+                <Marker key={i} position={[m.lat, m.lon]}>
+                  <Popup>
+                    <strong>WR: {m.wr}</strong><br/>
+                    {m.indirizzo}<br/>
+                    Stato: {m.stato} | Pali: {m.pali}<br/>
+                    Dispaccio: {m.datadispaccio}<br/>
+                    <a href={`https://www.google.com/maps/dir/?api=1&destination=${m.lat},${m.lon}`} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>🧭 Indicazioni</a>
+                  </Popup>
+                </Marker>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(subMap).sort((a, b) => b[1].length - a[1].length).map(([cod, wrs], i) => {
-              const old = wrs.filter(w => isOld(w.Datadispaccio)).length;
-              const coord = wrs.filter(w => parseFloat(w.Latitudine) && parseFloat(w.Longitudine)).length;
-              const nome = wrs[0]?.Descrizione_Sq || '—';
-              const isSel = selectedSquadra === cod;
-              return (
-                <tr key={i} onClick={() => setSelectedSquadra(isSel ? null : cod)}
-                  style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer', background: isSel ? 'rgba(59,130,246,0.1)' : 'transparent', transition: 'background 0.15s' }}>
-                  <td style={{ padding: '10px 14px', fontFamily: 'var(--mono)', fontSize: '12px', color: 'var(--accent)', fontWeight: 600 }}>{cod}</td>
-                  <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--muted)' }}>{nome}</td>
-                  <td style={{ padding: '10px 14px', fontSize: '13px', fontWeight: 500 }}>{wrs.length}</td>
-                  <td style={{ padding: '10px 14px' }}>
-                    {old > 0 ? <span style={{ fontSize: '12px', color: 'var(--red)' }}>⚠ {old}</span> : <span style={{ fontSize: '12px', color: 'var(--muted)' }}>—</span>}
-                  </td>
-                  <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--muted)' }}>{coord}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+            </MapContainer>
+          </div>
+        ) : (
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead><tr style={{ background: '#334155' }}>
+                <th style={{ padding: 8, textAlign: 'left' }}>WR</th>
+                <th style={{ padding: 8, textAlign: 'left' }}>Stato</th>
+                <th style={{ padding: 8, textAlign: 'left' }}>Indirizzo</th>
+                <th style={{ padding: 8, textAlign: 'left' }}>Data</th>
+                <th style={{ padding: 8, textAlign: 'left' }}>Pali</th>
+              </tr></thead>
+              <tbody>
+                {filteredWR.map((r, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid #334155', background: i % 2 === 0 ? '#1e293b' : '#0f172a' }}>
+                    <td style={{ padding: 8 }}>{r.WR}</td>
+                    <td style={{ padding: 8 }}>{r.StatoWR}</td>
+                    <td style={{ padding: 8 }}>{r.Indirizzo}, {r.Localita}</td>
+                    <td style={{ padding: 8 }}>{r.Datadispaccio}</td>
+                    <td style={{ padding: 8 }}>{r.Pali}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
-  );
-}
-
-export default function AdminDashboard() {
-  return (
-    <Layout navItems={NAV}>
-      <Routes>
-        <Route path="/" element={<DashboardHome />} />
-        <Route path="/pratiche" element={<div style={{ padding: 24, color: 'var(--muted)' }}>Pratiche — in sviluppo</div>} />
-        <Route path="/sub" element={<div style={{ padding: 24, color: 'var(--muted)' }}>Sub e squadre — in sviluppo</div>} />
-        <Route path="/link" element={<div style={{ padding: 24, color: 'var(--muted)' }}>Link attivi — in sviluppo</div>} />
-        <Route path="/utenti" element={<div style={{ padding: 24, color: 'var(--muted)' }}>Gestione utenti — in sviluppo</div>} />
-      </Routes>
-    </Layout>
   );
 }

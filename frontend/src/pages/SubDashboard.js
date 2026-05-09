@@ -108,19 +108,26 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
     });
   };
 
-  // Aggiorna visibilità marker quando cambia filtro squadra
+  // Aggiorna visibilità marker quando cambiano i filtri
   useEffect(() => {
     if (!mapInstanceRef.current) return;
     Object.entries(markersRef.current).forEach(([wrNum, marker]) => {
-      if (!filtroSquadra) {
-        marker.setStyle({ opacity: 1, fillOpacity: 0.9 });
-      } else {
+      const w = wr.find(r => String(r.WR) === wrNum);
+      if (!w) return;
+      let visible = true;
+      if (filtroSquadra) {
         const sq = wrToSquadra[wrNum];
-        const visible = sq && sq.token === filtroSquadra;
-        marker.setStyle({ opacity: visible ? 1 : 0.1, fillOpacity: visible ? 0.9 : 0.1 });
+        visible = sq && sq.token === filtroSquadra;
       }
+      if (filtroCentrale && !w.Centrale?.toLowerCase().includes(filtroCentrale.toLowerCase())) visible = false;
+      if (filtroComune && w.Localita !== filtroComune) visible = false;
+      if (filtroMiniSquadra) {
+        const sq = wrToSquadra[wrNum];
+        if (!sq || sq.token !== filtroMiniSquadra) visible = false;
+      }
+      marker.setStyle({ opacity: visible ? 1 : 0.05, fillOpacity: visible ? 0.9 : 0.05 });
     });
-  }, [filtroSquadra]);
+  }, [filtroSquadra, filtroCentrale, filtroComune, filtroMiniSquadra]);
 
   const cercaSuMappa = (w) => {
     const lat = parseFloat(w.Latitudine);
@@ -168,21 +175,38 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, opacity: 0.7 }).addTo(map);
       const bounds = [];
       wr.forEach(w => {
-        const lat = parseFloat(w.Latitudine);
-        const lon = parseFloat(w.Longitudine);
+        const lat = parseFloat(w.Latitudine) || parseFloat(w.LatInferita);
+        const lon = parseFloat(w.Longitudine) || parseFloat(w.LonInferita);
         if (!lat || !lon || isNaN(lat) || isNaN(lon)) return;
+        const isInferred = !!w.CoordInferita;
         const isAssigned = !!wrToSquadra[String(w.WR)];
-        const color = wrToSquadra[String(w.WR)]?.color || '#3b82f6';
+        const color = wrToSquadra[String(w.WR)]?.color || (isInferred ? '#94a3b8' : '#3b82f6');
         const sqNome = wrToSquadra[String(w.WR)]?.nome || '';
-        const marker = L.circleMarker([lat, lon], { 
-          radius: isAssigned ? 10 : 9, 
-          fillColor: color, 
-          color: isAssigned ? 'white' : 'white', 
-          weight: isAssigned ? 3 : 2, 
-          fillOpacity: 0.9 
-        })
-          .addTo(map)
-          .bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:${color}">WR ${w.WR}</b><br/>${w.Indirizzo||''}, ${w.Localita||''}<br/>Stato: <b>${w.StatoWR}</b>${sqNome ? `<br/><span style="color:${color}">■ ${sqNome}</span>` : ''}</div>`);
+        let marker;
+        if (isInferred) {
+          // Quadrato per coordinate inferite
+          const size = 12;
+          const icon = L.divIcon({
+            className: '',
+            html: `<div style="width:${size}px;height:${size}px;background:${color};border:2px solid white;opacity:0.8;cursor:pointer;transform:rotate(45deg)"></div>`,
+            iconSize: [size, size],
+            iconAnchor: [size/2, size/2],
+            popupAnchor: [0, -size/2]
+          });
+          marker = L.marker([lat, lon], { icon })
+            .addTo(map)
+            .bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:${color}">WR ${w.WR}</b><br/>${w.Indirizzo||''}, ${w.Localita||''}<br/>Stato: <b>${w.StatoWR}</b><br/><span style="color:#f59e0b">⚠ Posizione approssimativa (${w.Localita||w.Centrale})</span>${sqNome ? `<br/><span style="color:${color}">■ ${sqNome}</span>` : ''}</div>`);
+        } else {
+          marker = L.circleMarker([lat, lon], { 
+            radius: isAssigned ? 10 : 9, 
+            fillColor: color, 
+            color: 'white', 
+            weight: isAssigned ? 3 : 2, 
+            fillOpacity: 0.9 
+          })
+            .addTo(map)
+            .bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:${color}">WR ${w.WR}</b><br/>${w.Indirizzo||''}, ${w.Localita||''}<br/>Stato: <b>${w.StatoWR}</b>${sqNome ? `<br/><span style="color:${color}">■ ${sqNome}</span>` : ''}</div>`);
+        }
         if (!isAssigned) {
           marker.on('click', () => toggleSelect(String(w.WR)));
         }
@@ -283,7 +307,9 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
                     </div>
                     {hasCoord
                       ? <span onClick={e => { e.stopPropagation(); cercaSuMappa(w); }} title="Vai sulla mappa" style={{ color: 'var(--green)', fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>◎</span>
-                      : <span title="Nessuna coordinata" style={{ color: 'var(--muted)', fontSize: 11, flexShrink: 0 }}>—</span>
+                      : w.CoordInferita
+                        ? <span onClick={e => { e.stopPropagation(); cercaSuMappa(w); }} title="Posizione approssimativa" style={{ color: 'var(--accent2)', fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>◇</span>
+                        : <span title="Nessuna coordinata" style={{ color: 'var(--muted)', fontSize: 11, flexShrink: 0 }}>—</span>
                     }
                   </div>
                 );

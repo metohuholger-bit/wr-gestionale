@@ -163,6 +163,53 @@ async def get_wr(user=Depends(get_current_user)):
         else:
             rows = []
 
+    # Calcola coordinate di riferimento per comune e centrale
+    # usando la media delle WR che hanno coordinate reali
+    comune_coords = {}
+    centrale_coords = {}
+    for r in rows:
+        lat = r.get("Lat") or r.get("Latitudine")
+        lon = r.get("Lon") or r.get("Longitudine")
+        try:
+            lat, lon = float(str(lat).replace(",",".")), float(str(lon).replace(",","."))
+            if lat and lon and 35 < lat < 48 and 6 < lon < 19:
+                comune = r.get("Localita", "")
+                centrale = r.get("Centrale", "")
+                if comune:
+                    if comune not in comune_coords:
+                        comune_coords[comune] = []
+                    comune_coords[comune].append((lat, lon))
+                if centrale:
+                    if centrale not in centrale_coords:
+                        centrale_coords[centrale] = []
+                    centrale_coords[centrale].append((lat, lon))
+        except:
+            pass
+
+    # Calcola medie
+    comune_ref = {k: (sum(v[0] for v in vs)/len(vs), sum(v[1] for v in vs)/len(vs)) for k, vs in comune_coords.items()}
+    centrale_ref = {k: (sum(v[0] for v in vs)/len(vs), sum(v[1] for v in vs)/len(vs)) for k, vs in centrale_coords.items()}
+
+    # Aggiungi coordinate inferite per WR senza coordinate
+    for r in rows:
+        lat = r.get("Latitudine", "")
+        lon = r.get("Longitudine", "")
+        try:
+            flat = float(str(lat).replace(",","."))
+            flon = float(str(lon).replace(",","."))
+            has_coord = flat and flon and 35 < flat < 48 and 6 < flon < 19
+        except:
+            has_coord = False
+
+        if not has_coord:
+            comune = r.get("Localita", "")
+            centrale = r.get("Centrale", "")
+            ref = comune_ref.get(comune) or centrale_ref.get(centrale)
+            if ref:
+                r["LatInferita"] = round(ref[0], 6)
+                r["LonInferita"] = round(ref[1], 6)
+                r["CoordInferita"] = True
+
     return rows
 
 # ── MINI-SQUADRE ──

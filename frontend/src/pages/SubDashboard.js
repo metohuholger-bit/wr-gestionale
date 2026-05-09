@@ -54,6 +54,21 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata }) {
   const [nomeSquadra, setNomeSquadra] = useState('');
   const [saved, setSaved] = useState(false);
   const [searchWR, setSearchWR] = useState('');
+  const [filtroCentrale, setFiltroCentrale] = useState('');
+  const [filtroComune, setFiltroComune] = useState('');
+
+  const centrali = [...new Set(wr.map(w => w.Centrale).filter(Boolean))].sort();
+  const comuni = [...new Set(wr.map(w => w.Localita).filter(Boolean))].sort();
+
+  const wrFiltrati = wr.filter(w => {
+    if (filtroCentrale && w.Centrale !== filtroCentrale) return false;
+    if (filtroComune && w.Localita !== filtroComune) return false;
+    if (searchWR) {
+      const q = searchWR.toLowerCase();
+      return w.WR?.toString().includes(q) || w.Indirizzo?.toLowerCase().includes(q);
+    }
+    return true;
+  });
 
   const toggleSelect = (wrNum) => {
     setSelected(prev => {
@@ -66,11 +81,13 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata }) {
     });
   };
 
-  const cercaWR = () => {
-    const q = searchWR.trim();
-    if (!q || !mapInstanceRef.current) return;
-    const m = markersRef.current[q];
-    if (m) { mapInstanceRef.current.setView(m.getLatLng(), 15, { animate: true }); m.openPopup(); }
+  const cercaSuMappa = (w) => {
+    const lat = parseFloat(w.Latitudine);
+    const lon = parseFloat(w.Longitudine);
+    if (lat && lon && mapInstanceRef.current) {
+      mapInstanceRef.current.setView([lat, lon], 15, { animate: true });
+      markersRef.current[String(w.WR)]?.openPopup();
+    }
   };
 
   const creaSquadra = async () => {
@@ -122,21 +139,23 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata }) {
     return () => { if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; } };
   }, [wr]);
 
+  const selectStyle = { background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 5, fontSize: 11, outline: 'none', width: '100%' };
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: '92vw', height: '88vh', background: 'var(--panel)', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)' }}>Mappa — {wr.filter(w => w.Latitudine && w.Longitudine).length} punti</span>
+      <div style={{ width: '95vw', height: '90vh', background: 'var(--panel)', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {/* Header */}
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)' }}>
+            Mappa — {wr.filter(w => w.Latitudine && w.Longitudine).length} con coord / {wr.length} totali
+          </span>
           {selected.size > 0 && <span style={{ fontSize: 12, color: 'var(--accent2)' }}>● {selected.size} selezionate</span>}
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
-            <input value={searchWR} onChange={e => setSearchWR(e.target.value)} onKeyDown={e => e.key === 'Enter' && cercaWR()}
-              placeholder="Cerca WR..." style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 6, fontSize: 12, outline: 'none', width: 120 }} />
-            <button onClick={cercaWR} style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--accent)', padding: '5px 8px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Cerca</button>
-          </div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer' }}>×</button>
+          <button onClick={onClose} style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer' }}>×</button>
         </div>
+
+        {/* Crea squadra bar */}
         {selected.size > 0 && (
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', background: 'rgba(245,158,11,0.08)', display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border)', background: 'rgba(245,158,11,0.08)', display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
             <span style={{ fontSize: 12, color: 'var(--accent2)' }}>🟡 {selected.size} WR selezionate:</span>
             <input value={nomeSquadra} onChange={e => setNomeSquadra(e.target.value)} placeholder="Nome squadra..."
               style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 10px', borderRadius: 6, fontSize: 12, outline: 'none', width: 180 }} />
@@ -149,10 +168,52 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata }) {
               style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 12, cursor: 'pointer' }}>Deseleziona tutto</button>
           </div>
         )}
-        <div style={{ fontSize: 11, color: 'var(--muted)', padding: '5px 16px', background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}>
-          Clicca sui punti per selezionarli (diventano gialli), poi dai un nome e crea la mini-squadra
+
+        {/* Body: mappa + pannello */}
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          {/* Mappa */}
+          <div ref={mapRef} style={{ flex: 1 }} />
+
+          {/* Pannello laterale */}
+          <div style={{ width: 300, background: 'var(--bg)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+            {/* Filtri */}
+            <div style={{ padding: 10, borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <input value={searchWR} onChange={e => setSearchWR(e.target.value)} placeholder="Cerca WR, indirizzo..."
+                style={selectStyle} />
+              <select value={filtroCentrale} onChange={e => setFiltroCentrale(e.target.value)} style={selectStyle}>
+                <option value="">Tutte le centrali</option>
+                {centrali.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select value={filtroComune} onChange={e => setFiltroComune(e.target.value)} style={selectStyle}>
+                <option value="">Tutti i comuni</option>
+                {comuni.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'right' }}>{wrFiltrati.length} WR</div>
+            </div>
+
+            {/* Lista WR */}
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              {wrFiltrati.map((w, i) => {
+                const hasCoord = parseFloat(w.Latitudine) && parseFloat(w.Longitudine);
+                const isSel = selected.has(String(w.WR));
+                return (
+                  <div key={i} style={{ padding: '7px 10px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, background: isSel ? 'rgba(245,158,11,0.1)' : 'transparent', cursor: 'pointer' }}
+                    onClick={() => toggleSelect(String(w.WR))}>
+                    <input type="checkbox" checked={isSel} onChange={() => {}} style={{ flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: isSel ? 'var(--accent2)' : 'var(--accent)' }}>{w.WR}</div>
+                      <div style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.Indirizzo}, {w.Localita}</div>
+                    </div>
+                    {hasCoord
+                      ? <span onClick={e => { e.stopPropagation(); cercaSuMappa(w); }} title="Vai sulla mappa" style={{ color: 'var(--green)', fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>◎</span>
+                      : <span title="Nessuna coordinata" style={{ color: 'var(--muted)', fontSize: 11, flexShrink: 0 }}>—</span>
+                    }
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
-        <div ref={mapRef} style={{ flex: 1 }} />
       </div>
     </div>
   );

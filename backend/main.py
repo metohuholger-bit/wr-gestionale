@@ -199,6 +199,13 @@ async def update_mini_squadra_wr(token: str, wr_list: List[str], user=Depends(ge
     )
     return {"ok": True}
 
+@app.delete("/mini-squadre/{token}")
+async def delete_mini_squadra(token: str, user=Depends(get_current_user)):
+    if user["role"] not in ["admin", "sub"]:
+        raise HTTPException(status_code=403)
+    await db.mini_squadre.delete_one({"link_token": token})
+    return {"ok": True}
+
 # ── VIEW PUBBLICA (no auth) ──
 @app.get("/view/{token}")
 async def public_view(token: str):

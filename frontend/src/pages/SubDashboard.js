@@ -139,7 +139,12 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
       setTimeout(() => setSaved(false), 3000);
       setNomeSquadra('');
       setSelected(new Set());
-      Object.entries(markersRef.current).forEach(([wrNum, m]) => m.setStyle({ fillColor: wrToSquadra[wrNum]?.color || '#3b82f6' }));
+      // Forza ricaricamento mappa per aggiornare colori
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+        markersRef.current = {};
+      }
     } catch (e) { console.error(e); }
   };
 
@@ -184,7 +189,7 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
     };
     document.head.appendChild(script);
     return () => { if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; } };
-  }, [wr]);
+  }, [wr, miniSquadre]);
 
   const selectStyle = { background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 5, fontSize: 11, outline: 'none', width: '100%' };
 
@@ -338,7 +343,13 @@ export default function SubDashboard({ previewMode }) {
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paginated = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE);
 
-  const removeWR = async (token, wrNum) => {
+  const deleteSquad = async (token) => {
+    if (!window.confirm('Eliminare questa mini-squadra?')) return;
+    try {
+      await axios.delete(`${API}/mini-squadre/${token}`);
+      setMiniSquadre(prev => prev.filter(s => s.link_token !== token));
+    } catch (e) { console.error(e); }
+  };
     const sq = miniSquadre.find(s => s.link_token === token);
     if (!sq) return;
     const newList = sq.wr_list.filter(w => w !== wrNum);
@@ -462,6 +473,10 @@ export default function SubDashboard({ previewMode }) {
                       <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/view/${sq.link_token}`)}
                         style={{ marginLeft: 'auto', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--accent)', padding: '5px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
                         ⎘ Copia link
+                      </button>
+                      <button onClick={() => deleteSquad(sq.link_token)}
+                        style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: 'var(--red)', padding: '5px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
+                        🗑 Elimina
                       </button>
                     </div>
                     <div style={{ padding: '8px 16px' }}>

@@ -46,7 +46,7 @@ function PopupWR({ w, onClose }) {
   );
 }
 
-function MappaSub({ wr, onClose, API, user, onSquadraCreata }) {
+function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef({});
@@ -77,12 +77,12 @@ function MappaSub({ wr, onClose, API, user, onSquadraCreata }) {
     if (!nomeSquadra || selected.size === 0) return;
     try {
       const r = await axios.post(`${API}/mini-squadre`, {
-        nome: nomeSquadra, sub_code: user.sub_code, wr_list: [...selected]
+        nome: nomeSquadra, sub_code: subCode, wr_list: [...selected]
       });
       const link = `${window.location.origin}/view/${r.data.token}`;
       navigator.clipboard.writeText(link);
       setSaved(true);
-      onSquadraCreata({ nome: nomeSquadra, sub_code: user.sub_code, wr_list: [...selected], link_token: r.data.token });
+      onSquadraCreata({ nome: nomeSquadra, sub_code: subCode, wr_list: [...selected], link_token: r.data.token });
       setTimeout(() => setSaved(false), 3000);
       setNomeSquadra('');
       setSelected(new Set());
@@ -224,7 +224,7 @@ export default function SubDashboard({ previewMode }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
-      {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} />}
+      {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} subCode={subCode} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} />}
       {selectedWR && <PopupWR w={selectedWR} onClose={() => setSelectedWR(null)} />}
 
       {/* Topbar */}

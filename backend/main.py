@@ -121,19 +121,31 @@ async def get_me(user=Depends(get_current_user)):
 # ── WR DATA (legge da Google Sheet CSV) ──
 SHEET_CSV_URL = os.getenv("SHEET_CSV_URL", "")
 
-@app.get("/wr")
-async def get_wr(user=Depends(get_current_user)):
-    if not SHEET_CSV_URL:
-        return []
+import time
+_sheet_cache = {"data": [], "ts": 0}
+CACHE_TTL = 300  # 5 minuti
+
+async def get_sheet_data():
+    global _sheet_cache
+    if time.time() - _sheet_cache["ts"] < CACHE_TTL and _sheet_cache["data"]:
+        return _sheet_cache["data"]
     async with httpx.AsyncClient() as c:
         r = await c.get(SHEET_CSV_URL, follow_redirects=True)
-    rows = []
     lines = r.text.strip().split("\n")
     headers = [h.strip() for h in lines[0].split(",")]
+    rows = []
     for line in lines[1:]:
         vals = line.split(",")
         row = {headers[i]: vals[i].strip() if i < len(vals) else "" for i in range(len(headers))}
         rows.append(row)
+    _sheet_cache = {"data": rows, "ts": time.time()}
+    return rows
+
+@app.get("/wr")
+async def get_wr(user=Depends(get_current_user)):
+    if not SHEET_CSV_URL:
+        return []
+    rows = await get_sheet_data()
 
     # Filtra per ruolo usando colonna "Sq"
     if user["role"] == "sub":

@@ -115,18 +115,12 @@ export default function Pratiche() {
   const filtered = wr.filter(w => {
     if (filtroSq && w.Sq !== filtroSq) return false;
     if (filtroStato && w.StatoWR !== filtroStato) return false;
-    if (filtroCentrale && w.Centrale !== filtroCentrale) return false;
-    if (filtroDescCentrale && w.Desc_Centrale !== filtroDescCentrale) return false;
+    if (filtroCentrale && !w.Centrale?.toLowerCase().includes(filtroCentrale.toLowerCase())) return false;
+    if (filtroDescCentrale && !w.Desc_Centrale?.toLowerCase().includes(filtroDescCentrale.toLowerCase())) return false;
     if (filtro90 && !isOld(w.Datadispaccio)) return false;
     if (search) {
       const q = search.toLowerCase();
-      return (
-        w.WR?.toString().includes(q) ||
-        w.Indirizzo?.toLowerCase().includes(q) ||
-        w.Localita?.toLowerCase().includes(q) ||
-        w.Assistente?.toLowerCase().includes(q) ||
-        w.Note?.toLowerCase().includes(q)
-      );
+      return Object.values(w).some(v => v && String(v).toLowerCase().includes(q));
     }
     return true;
   });
@@ -175,14 +169,12 @@ export default function Pratiche() {
           <option value="">Tutti gli stati</option>
           {stati.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select value={filtroCentrale} onChange={e => { setFiltroCentrale(e.target.value); setPage(1); }} style={selectStyle}>
-          <option value="">Tutte le centrali</option>
-          {centrali.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select value={filtroDescCentrale} onChange={e => { setFiltroDescCentrale(e.target.value); setPage(1); }} style={selectStyle}>
-          <option value="">Tutte le desc. centrali</option>
-          {descCentrali.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
+        <input value={filtroCentrale} onChange={e => { setFiltroCentrale(e.target.value); setPage(1); }}
+          placeholder="Cerca centrale (es. 575)..."
+          style={{ ...selectStyle, width: 180 }} />
+        <input value={filtroDescCentrale} onChange={e => { setFiltroDescCentrale(e.target.value); setPage(1); }}
+          placeholder="Cerca desc. centrale..."
+          style={{ ...selectStyle, width: 180 }} />
         <button onClick={() => { setFiltro90(!filtro90); setPage(1); }}
           style={{ background: filtro90 ? 'rgba(239,68,68,0.2)' : 'var(--bg)', border: `1px solid ${filtro90 ? 'var(--red)' : 'var(--border)'}`, color: filtro90 ? 'var(--red)' : 'var(--muted)', padding: '5px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
           ⚠ +90gg {filtro90 && `(${filtered.length})`}

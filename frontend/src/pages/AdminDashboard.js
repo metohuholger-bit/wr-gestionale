@@ -4,6 +4,7 @@ import Layout from '../components/Layout';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import Pratiche from './Pratiche';
+import SubSquadre from './SubSquadre';
 
 const NAV = [
   {
@@ -270,7 +271,7 @@ export default function AdminDashboard() {
       <Routes>
         <Route path="/" element={<DashboardHome />} />
         <Route path="/pratiche" element={<Pratiche />} />
-        <Route path="/sub" element={<div style={{ padding: 24, color: 'var(--muted)' }}>Sub e squadre — in sviluppo</div>} />
+        <Route path="/sub" element={<SubSquadre />} />
         <Route path="/link" element={<div style={{ padding: 24, color: 'var(--muted)' }}>Link attivi — in sviluppo</div>} />
         <Route path="/utenti" element={<div style={{ padding: 24, color: 'var(--muted)' }}>Gestione utenti — in sviluppo</div>} />
       </Routes>

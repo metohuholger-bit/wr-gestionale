@@ -350,6 +350,8 @@ export default function SubDashboard({ previewMode }) {
       setMiniSquadre(prev => prev.filter(s => s.link_token !== token));
     } catch (e) { console.error(e); }
   };
+
+  const removeWR = async (token, wrNum) => {
     const sq = miniSquadre.find(s => s.link_token === token);
     if (!sq) return;
     const newList = sq.wr_list.filter(w => w !== wrNum);

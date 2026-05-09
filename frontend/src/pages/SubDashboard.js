@@ -158,12 +158,12 @@ function MappaSub({ wr, onClose, API, user, onSquadraCreata }) {
   );
 }
 
-export default function SubDashboard() {
+export default function SubDashboard({ previewMode }) {
   const { API, user, logout } = useAuth();
   const navigate = useNavigate();
-  const [wr, setWr] = useState([]);
+  const [wr, setWr] = useState(previewMode?.wrData || []);
   const [miniSquadre, setMiniSquadre] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!previewMode);
   const [showMappa, setShowMappa] = useState(false);
   const [activeTab, setActiveTab] = useState('pratiche');
   const [selectedWR, setSelectedWR] = useState(null);
@@ -173,13 +173,16 @@ export default function SubDashboard() {
   const [page, setPage] = useState(1);
   const PER_PAGE = 100;
 
+  const subCode = previewMode?.subCode || user?.sub_code;
+
   useEffect(() => {
+    if (previewMode) return; // usa dati già passati
     Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/mini-squadre`)])
       .then(([wrR, sqR]) => {
         setWr(wrR.data.filter(w => !STATI_ESCLUSI.includes(w.StatoWR?.toUpperCase())));
         setMiniSquadre(sqR.data);
       }).catch(() => {}).finally(() => setLoading(false));
-  }, [API]);
+  }, [API, previewMode]);
 
   const oggi = new Date();
   const isOld = (d) => {

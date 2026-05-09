@@ -5,6 +5,71 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import Pratiche from './Pratiche';
 import SubSquadre from './SubSquadre';
+import SubDashboard from './SubDashboard';
+
+function VistaSub() {
+  const { API, user } = useAuth();
+  const [wr, setWr] = useState([]);
+  const [selectedSq, setSelectedSq] = useState('');
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    axios.get(`${API}/wr`).then(r => setWr(r.data)).catch(() => {});
+  }, [API]);
+
+  const squadre = [...new Set(wr.map(w => w.Sq).filter(Boolean))].sort();
+  const wrFiltrati = wr.filter(w => w.Sq === selectedSq && w.StatoWR?.toUpperCase() !== 'NUOVA');
+
+  // Fakeuser per SubDashboard
+  const fakeUser = { ...user, role: 'sub', sub_code: selectedSq };
+
+  if (loaded && selectedSq) {
+    return (
+      <div style={{ height: 'calc(100vh - 48px)', overflow: 'hidden', position: 'relative' }}>
+        <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 100, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={() => setLoaded(false)} style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
+            ← Torna
+          </button>
+          <span style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid var(--border)', color: 'var(--accent)', padding: '6px 12px', borderRadius: 6, fontSize: 12, fontFamily: 'var(--mono)' }}>
+            Anteprima: {selectedSq}
+          </span>
+        </div>
+        {/* Inietta dati nel contesto temporaneo */}
+        <SubDashboard previewMode={{ subCode: selectedSq, wrData: wrFiltrati }} />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: 24 }}>
+      <div style={{ fontSize: 18, fontWeight: 500, marginBottom: 4 }}>Vista Sub</div>
+      <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24 }}>Scegli un sub per vedere la sua vista</div>
+
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20 }}>
+        <select value={selectedSq} onChange={e => setSelectedSq(e.target.value)}
+          style={{ background: 'var(--panel)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 12px', borderRadius: 8, fontSize: 14, outline: 'none', minWidth: 200 }}>
+          <option value="">Seleziona squadra/sub...</option>
+          {squadre.map(s => {
+            const nome = wr.find(w => w.Sq === s)?.Descrizione_Sq || '';
+            return <option key={s} value={s}>{s}{nome ? ` — ${nome}` : ''}</option>;
+          })}
+        </select>
+        <button onClick={() => selectedSq && setLoaded(true)} disabled={!selectedSq}
+          style={{ background: selectedSq ? 'rgba(59,130,246,0.2)' : 'var(--bg)', border: `1px solid ${selectedSq ? 'var(--accent)' : 'var(--border)'}`, color: selectedSq ? 'var(--accent)' : 'var(--muted)', padding: '8px 16px', borderRadius: 8, fontSize: 14, cursor: selectedSq ? 'pointer' : 'not-allowed' }}>
+          Visualizza →
+        </button>
+      </div>
+
+      {selectedSq && (
+        <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, padding: 16 }}>
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>
+            <span style={{ color: 'var(--accent)', fontFamily: 'var(--mono)', fontWeight: 600 }}>{selectedSq}</span> — {wrFiltrati.length} WR visibili (escluse NUOVA)
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const NAV = [
   {
@@ -12,6 +77,7 @@ const NAV = [
     items: [
       { to: '/admin', label: 'Dashboard', icon: '▦' },
       { to: '/admin/pratiche', label: 'Pratiche', icon: '≡' },
+      { to: '/admin/vista-sub', label: 'Vista Sub', icon: '◉' },
     ]
   },
   {
@@ -270,6 +336,7 @@ export default function AdminDashboard() {
     <Layout navItems={NAV}>
       <Routes>
         <Route path="/" element={<DashboardHome />} />
+        <Route path="/vista-sub" element={<VistaSub />} />
         <Route path="/pratiche" element={<Pratiche />} />
         <Route path="/sub" element={<SubSquadre />} />
         <Route path="/link" element={<div style={{ padding: 24, color: 'var(--muted)' }}>Link attivi — in sviluppo</div>} />

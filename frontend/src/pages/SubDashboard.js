@@ -91,12 +91,14 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
   });
 
   const toggleSelect = (wrNum) => {
+    // Blocca WR già assegnate a una mini-squadra
+    if (wrToSquadra[wrNum]) return;
     setSelected(prev => {
       const s = new Set(prev);
       if (s.has(wrNum)) s.delete(wrNum);
       else s.add(wrNum);
       const m = markersRef.current[wrNum];
-      if (m) m.setStyle({ fillColor: s.has(wrNum) ? '#f59e0b' : (wrToSquadra[wrNum]?.color || '#3b82f6') });
+      if (m) m.setStyle({ fillColor: s.has(wrNum) ? '#f59e0b' : '#3b82f6' });
       return s;
     });
   };
@@ -159,11 +161,21 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
         const lat = parseFloat(w.Latitudine);
         const lon = parseFloat(w.Longitudine);
         if (!lat || !lon || isNaN(lat) || isNaN(lon)) return;
+        const isAssigned = !!wrToSquadra[String(w.WR)];
         const color = wrToSquadra[String(w.WR)]?.color || '#3b82f6';
-        const marker = L.circleMarker([lat, lon], { radius: 9, fillColor: color, color: 'white', weight: 2, fillOpacity: 0.9 })
+        const sqNome = wrToSquadra[String(w.WR)]?.nome || '';
+        const marker = L.circleMarker([lat, lon], { 
+          radius: isAssigned ? 10 : 9, 
+          fillColor: color, 
+          color: isAssigned ? 'white' : 'white', 
+          weight: isAssigned ? 3 : 2, 
+          fillOpacity: 0.9 
+        })
           .addTo(map)
-          .bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:${color}">WR ${w.WR}</b><br/>${w.Indirizzo||''}, ${w.Localita||''}<br/>Stato: <b>${w.StatoWR}</b>${wrToSquadra[String(w.WR)] ? `<br/>Squadra: <b>${wrToSquadra[String(w.WR)].nome}</b>` : ''}</div>`);
-        marker.on('click', () => toggleSelect(String(w.WR)));
+          .bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:${color}">WR ${w.WR}</b><br/>${w.Indirizzo||''}, ${w.Localita||''}<br/>Stato: <b>${w.StatoWR}</b>${sqNome ? `<br/><span style="color:${color}">■ ${sqNome}</span>` : ''}</div>`);
+        if (!isAssigned) {
+          marker.on('click', () => toggleSelect(String(w.WR)));
+        }
         markersRef.current[String(w.WR)] = marker;
         bounds.push([lat, lon]);
       });
@@ -248,14 +260,15 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
                 const hasCoord = parseFloat(w.Latitudine) && parseFloat(w.Longitudine);
                 const isSel = selected.has(String(w.WR));
                 const sqInfo = wrToSquadra[String(w.WR)];
+                const isAssigned = !!sqInfo;
                 return (
-                  <div key={i} style={{ padding: '7px 10px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, background: isSel ? 'rgba(245,158,11,0.1)' : 'transparent', cursor: 'pointer', borderLeft: sqInfo ? `3px solid ${sqInfo.color}` : '3px solid transparent' }}
-                    onClick={() => toggleSelect(String(w.WR))}>
-                    <input type="checkbox" checked={isSel} onChange={() => {}} style={{ flexShrink: 0 }} />
+                  <div key={i} style={{ padding: '7px 10px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, background: isSel ? 'rgba(245,158,11,0.1)' : isAssigned ? 'rgba(0,0,0,0.1)' : 'transparent', cursor: isAssigned ? 'not-allowed' : 'pointer', borderLeft: sqInfo ? `3px solid ${sqInfo.color}` : '3px solid transparent', opacity: isAssigned ? 0.7 : 1 }}
+                    onClick={() => !isAssigned && toggleSelect(String(w.WR))}>
+                    <input type="checkbox" checked={isSel} disabled={isAssigned} onChange={() => {}} style={{ flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: isSel ? 'var(--accent2)' : sqInfo ? sqInfo.color : 'var(--accent)' }}>{w.WR}</div>
                       <div style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.Indirizzo}, {w.Localita}</div>
-                      {sqInfo && <div style={{ fontSize: 9, color: sqInfo.color }}>{sqInfo.nome}</div>}
+                      {sqInfo && <div style={{ fontSize: 9, color: sqInfo.color, fontWeight: 600 }}>■ {sqInfo.nome}</div>}
                     </div>
                     {hasCoord
                       ? <span onClick={e => { e.stopPropagation(); cercaSuMappa(w); }} title="Vai sulla mappa" style={{ color: 'var(--green)', fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>◎</span>

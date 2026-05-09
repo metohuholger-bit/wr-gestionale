@@ -25,6 +25,22 @@ const NAV = [
 function MappaSquadra({ wr, onClose }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
+  const markersRef = useRef({});
+  const [search, setSearch] = useState('');
+  const [notFound, setNotFound] = useState(false);
+
+  const cercaWR = () => {
+    const q = search.trim();
+    if (!q || !mapInstanceRef.current) return;
+    const marker = markersRef.current[q];
+    if (marker) {
+      mapInstanceRef.current.setView(marker.getLatLng(), 15, { animate: true });
+      marker.openPopup();
+      setNotFound(false);
+    } else {
+      setNotFound(true);
+    }
+  };
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
@@ -44,9 +60,10 @@ function MappaSquadra({ wr, onClose }) {
         const lat = parseFloat(w.Latitudine);
         const lon = parseFloat(w.Longitudine);
         if (!lat || !lon || isNaN(lat) || isNaN(lon)) return;
-        L.circleMarker([lat, lon], { radius: 8, fillColor: '#3b82f6', color: 'white', weight: 2, fillOpacity: 0.9 })
+        const marker = L.circleMarker([lat, lon], { radius: 8, fillColor: '#3b82f6', color: 'white', weight: 2, fillOpacity: 0.9 })
           .addTo(map)
           .bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:#3b82f6">WR ${w.WR}</b><br/>${w.Indirizzo || ''}, ${w.Localita || ''}<br/>Stato: <b>${w.StatoWR || 'N/D'}</b><br/>${lat && lon ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}" target="_blank" style="color:#22c55e">📍 Indicazioni</a>` : ''}</div>`);
+        markersRef.current[String(w.WR)] = marker;
         bounds.push([lat, lon]);
       });
       if (bounds.length > 0) map.fitBounds(bounds, { padding: [30, 30] });
@@ -59,8 +76,23 @@ function MappaSquadra({ wr, onClose }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: '90vw', height: '85vh', background: 'var(--panel)', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)' }}>Mappa — {wr.filter(w => w.Latitudine && w.Longitudine).length} punti su {wr.length} WR</span>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)' }}>
+            Mappa — {wr.filter(w => w.Latitudine && w.Longitudine).length} punti su {wr.length} WR
+          </span>
+          <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', alignItems: 'center' }}>
+            <input
+              value={search}
+              onChange={e => { setSearch(e.target.value); setNotFound(false); }}
+              onKeyDown={e => e.key === 'Enter' && cercaWR()}
+              placeholder="Cerca WR..."
+              style={{ background: 'var(--bg)', border: `1px solid ${notFound ? 'var(--red)' : 'var(--border)'}`, color: 'var(--text)', padding: '5px 10px', borderRadius: 6, fontSize: 12, outline: 'none', width: 140 }}
+            />
+            <button onClick={cercaWR} style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--accent)', padding: '5px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
+              Cerca
+            </button>
+            {notFound && <span style={{ fontSize: 11, color: 'var(--red)' }}>Non trovata</span>}
+          </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer' }}>×</button>
         </div>
         <div ref={mapRef} style={{ flex: 1 }} />

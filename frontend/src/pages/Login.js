@@ -1,40 +1,45 @@
-import React, { useState } from 'react';
-import { useGoogleLogin } from '@react-oauth/google';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 
+const API = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
+
 export default function Login() {
-  const { loginWithGoogle, API } = useAuth();
   const navigate = useNavigate();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const login = useGoogleLogin({
-    onSuccess: async (res) => {
+  // Gestisci il callback Google dopo il redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    if (code) {
       setLoading(true);
-      setError('');
-      try {
-        // Ottieni id_token da Google
-        const info = await axios.get(
-          `https://www.googleapis.com/oauth2/v3/userinfo`,
-          { headers: { Authorization: `Bearer ${res.access_token}` } }
-        );
-        // Usa access_token per autenticarsi con il nostro backend
-        const r = await axios.post(`${API}/auth/google`, { token: res.access_token });
-        const { token, user } = r.data;
-        localStorage.setItem('token', token);
-        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        if (user.role === 'admin') navigate('/admin');
-        else if (user.role === 'sub') navigate('/sub');
-      } catch (e) {
-        setError(e.response?.data?.detail || 'Accesso negato');
-      } finally {
-        setLoading(false);
-      }
-    },
-    onError: () => setError('Errore Google OAuth')
-  });
+      handleGoogleCode(code);
+    }
+  }, []);
+
+  const handleGoogleCode = async (code) => {
+    try {
+      const r = await axios.post(`${API}/auth/google`, { token: code });
+      const { token, user } = r.data;
+      localStorage.setItem('token', token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      if (user.role === 'admin') navigate('/admin');
+      else if (user.role === 'sub') navigate('/sub');
+    } catch (e) {
+      setError(e.response?.data?.detail || 'Accesso negato');
+      setLoading(false);
+    }
+  };
+
+  const handleLogin = () => {
+    const redirectUri = encodeURIComponent(window.location.origin + '/login');
+    const scope = encodeURIComponent('openid email profile');
+    const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&access_type=offline`;
+    window.location.href = url;
+  };
 
   return (
     <div style={{
@@ -70,15 +75,13 @@ export default function Login() {
         width: '320px',
         textAlign: 'center'
       }}>
-        <div style={{ fontSize: '16px', fontWeight: 500, marginBottom: '8px' }}>
-          Accedi
-        </div>
+        <div style={{ fontSize: '16px', fontWeight: 500, marginBottom: '8px' }}>Accedi</div>
         <div style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '24px' }}>
           Usa il tuo account Google aziendale
         </div>
 
         <button
-          onClick={() => login()}
+          onClick={handleLogin}
           disabled={loading}
           style={{
             width: '100%',

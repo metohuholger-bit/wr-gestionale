@@ -131,14 +131,19 @@ async def get_sheet_data():
         return _sheet_cache["data"]
     async with httpx.AsyncClient() as c:
         r = await c.get(SHEET_CSV_URL, follow_redirects=True)
-    import csv, io
+    import csv, io, re
     reader = csv.DictReader(io.StringIO(r.text))
     rows = []
     for row in reader:
-        # Salta righe con WR vuoto
         if not row.get("WR", "").strip():
             continue
-        rows.append({k.strip(): v.strip() for k, v in row.items()})
+        clean = {k.strip(): v.strip() for k, v in row.items()}
+        # Converti coordinate con virgola decimale in punto
+        for col in ["Latitudine", "Longitudine"]:
+            val = clean.get(col, "")
+            if val and re.match(r'^\d+,\d+$', val):
+                clean[col] = val.replace(",", ".")
+        rows.append(clean)
     _sheet_cache = {"data": rows, "ts": time.time()}
     return rows
 

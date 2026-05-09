@@ -46,7 +46,7 @@ function PopupWR({ w, onClose }) {
   );
 }
 
-function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata }) {
+function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadre }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef({});
@@ -56,9 +56,221 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata }) {
   const [searchWR, setSearchWR] = useState('');
   const [filtroCentrale, setFiltroCentrale] = useState('');
   const [filtroComune, setFiltroComune] = useState('');
+  const [filtroSquadra, setFiltroSquadra] = useState(null); // null = tutte
+
+  const COLORI = ['#f59e0b', '#22c55e', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#06b6d4', '#a855f7'];
 
   const centrali = [...new Set(wr.map(w => w.Centrale).filter(Boolean))].sort();
   const comuni = [...new Set(wr.map(w => w.Localita).filter(Boolean))].sort();
+
+  // Mappa WR -> mini-squadra
+  const wrToSquadra = {};
+  miniSquadre.forEach((sq, idx) => {
+    sq.wr_list?.forEach(wrNum => {
+      wrToSquadra[String(wrNum)] = { nome: sq.nome, color: COLORI[idx % COLORI.length], token: sq.link_token };
+    });
+  });
+
+  const getColor = (wrNum) => {
+    if (selected.has(String(wrNum))) return '#f59e0b';
+    return wrToSquadra[String(wrNum)]?.color || '#3b82f6';
+  };
+
+  const wrFiltrati = wr.filter(w => {
+    if (filtroCentrale && w.Centrale !== filtroCentrale) return false;
+    if (filtroComune && w.Localita !== filtroComune) return false;
+    if (filtroSquadra) {
+      const sq = wrToSquadra[String(w.WR)];
+      if (!sq || sq.token !== filtroSquadra) return false;
+    }
+    if (searchWR) {
+      const q = searchWR.toLowerCase();
+      return w.WR?.toString().includes(q) || w.Indirizzo?.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const toggleSelect = (wrNum) => {
+    setSelected(prev => {
+      const s = new Set(prev);
+      if (s.has(wrNum)) s.delete(wrNum);
+      else s.add(wrNum);
+      const m = markersRef.current[wrNum];
+      if (m) m.setStyle({ fillColor: s.has(wrNum) ? '#f59e0b' : (wrToSquadra[wrNum]?.color || '#3b82f6') });
+      return s;
+    });
+  };
+
+  // Aggiorna visibilità marker quando cambia filtro squadra
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    Object.entries(markersRef.current).forEach(([wrNum, marker]) => {
+      if (!filtroSquadra) {
+        marker.setStyle({ opacity: 1, fillOpacity: 0.9 });
+      } else {
+        const sq = wrToSquadra[wrNum];
+        const visible = sq && sq.token === filtroSquadra;
+        marker.setStyle({ opacity: visible ? 1 : 0.1, fillOpacity: visible ? 0.9 : 0.1 });
+      }
+    });
+  }, [filtroSquadra]);
+
+  const cercaSuMappa = (w) => {
+    const lat = parseFloat(w.Latitudine);
+    const lon = parseFloat(w.Longitudine);
+    if (lat && lon && mapInstanceRef.current) {
+      mapInstanceRef.current.setView([lat, lon], 15, { animate: true });
+      markersRef.current[String(w.WR)]?.openPopup();
+    }
+  };
+
+  const creaSquadra = async () => {
+    if (!nomeSquadra || selected.size === 0) return;
+    try {
+      const r = await axios.post(`${API}/mini-squadre`, {
+        nome: nomeSquadra, sub_code: subCode, wr_list: [...selected]
+      });
+      const link = `${window.location.origin}/view/${r.data.token}`;
+      navigator.clipboard.writeText(link);
+      setSaved(true);
+      onSquadraCreata({ nome: nomeSquadra, sub_code: subCode, wr_list: [...selected], link_token: r.data.token });
+      setTimeout(() => setSaved(false), 3000);
+      setNomeSquadra('');
+      setSelected(new Set());
+      Object.entries(markersRef.current).forEach(([wrNum, m]) => m.setStyle({ fillColor: wrToSquadra[wrNum]?.color || '#3b82f6' }));
+    } catch (e) { console.error(e); }
+  };
+
+  useEffect(() => {
+    if (!mapRef.current || mapInstanceRef.current) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+    document.head.appendChild(link);
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+    script.onload = () => {
+      const L = window.L;
+      const map = L.map(mapRef.current, { center: [42.5, 11.5], zoom: 8 });
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, opacity: 0.7 }).addTo(map);
+      const bounds = [];
+      wr.forEach(w => {
+        const lat = parseFloat(w.Latitudine);
+        const lon = parseFloat(w.Longitudine);
+        if (!lat || !lon || isNaN(lat) || isNaN(lon)) return;
+        const color = wrToSquadra[String(w.WR)]?.color || '#3b82f6';
+        const marker = L.circleMarker([lat, lon], { radius: 9, fillColor: color, color: 'white', weight: 2, fillOpacity: 0.9 })
+          .addTo(map)
+          .bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:${color}">WR ${w.WR}</b><br/>${w.Indirizzo||''}, ${w.Localita||''}<br/>Stato: <b>${w.StatoWR}</b>${wrToSquadra[String(w.WR)] ? `<br/>Squadra: <b>${wrToSquadra[String(w.WR)].nome}</b>` : ''}</div>`);
+        marker.on('click', () => toggleSelect(String(w.WR)));
+        markersRef.current[String(w.WR)] = marker;
+        bounds.push([lat, lon]);
+      });
+      if (bounds.length > 0) map.fitBounds(bounds, { padding: [30, 30] });
+      mapInstanceRef.current = map;
+    };
+    document.head.appendChild(script);
+    return () => { if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; } };
+  }, [wr]);
+
+  const selectStyle = { background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 5, fontSize: 11, outline: 'none', width: '100%' };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ width: '95vw', height: '90vh', background: 'var(--panel)', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {/* Header */}
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)' }}>
+            Mappa — {wr.filter(w => w.Latitudine && w.Longitudine).length} con coord / {wr.length} totali
+          </span>
+          {selected.size > 0 && <span style={{ fontSize: 12, color: 'var(--accent2)' }}>● {selected.size} selezionate</span>}
+
+          {/* Legenda mini-squadre */}
+          {miniSquadre.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginLeft: 8 }}>
+              <button onClick={() => setFiltroSquadra(null)}
+                style={{ padding: '3px 8px', borderRadius: 4, border: `1px solid ${filtroSquadra === null ? 'white' : 'var(--border)'}`, background: filtroSquadra === null ? 'rgba(255,255,255,0.2)' : 'transparent', color: 'var(--text)', fontSize: 11, cursor: 'pointer' }}>
+                Tutte
+              </button>
+              {miniSquadre.map((sq, idx) => (
+                <button key={sq.link_token} onClick={() => setFiltroSquadra(filtroSquadra === sq.link_token ? null : sq.link_token)}
+                  style={{ padding: '3px 8px', borderRadius: 4, border: `2px solid ${COLORI[idx % COLORI.length]}`, background: filtroSquadra === sq.link_token ? COLORI[idx % COLORI.length] + '33' : 'transparent', color: COLORI[idx % COLORI.length], fontSize: 11, cursor: 'pointer', fontWeight: 500 }}>
+                  ■ {sq.nome}
+                </button>
+              ))}
+              <button style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontSize: 11, cursor: 'pointer' }}
+                onClick={() => setFiltroSquadra('__none__')}>
+                □ Non assegnate
+              </button>
+            </div>
+          )}
+
+          <button onClick={onClose} style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer' }}>×</button>
+        </div>
+
+        {/* Crea squadra bar */}
+        {selected.size > 0 && (
+          <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border)', background: 'rgba(245,158,11,0.08)', display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
+            <span style={{ fontSize: 12, color: 'var(--accent2)' }}>🟡 {selected.size} WR selezionate:</span>
+            <input value={nomeSquadra} onChange={e => setNomeSquadra(e.target.value)} placeholder="Nome squadra..."
+              style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 10px', borderRadius: 6, fontSize: 12, outline: 'none', width: 180 }} />
+            <button onClick={creaSquadra} disabled={!nomeSquadra}
+              style={{ background: nomeSquadra ? 'rgba(245,158,11,0.2)' : 'var(--bg)', border: `1px solid ${nomeSquadra ? 'var(--accent2)' : 'var(--border)'}`, color: nomeSquadra ? 'var(--accent2)' : 'var(--muted)', padding: '5px 12px', borderRadius: 6, fontSize: 12, cursor: nomeSquadra ? 'pointer' : 'not-allowed' }}>
+              Crea e copia link
+            </button>
+            {saved && <span style={{ fontSize: 12, color: 'var(--green)' }}>✓ Link copiato!</span>}
+            <button onClick={() => { setSelected(new Set()); Object.entries(markersRef.current).forEach(([wrNum, m]) => m.setStyle({ fillColor: wrToSquadra[wrNum]?.color || '#3b82f6' })); }}
+              style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 12, cursor: 'pointer' }}>Deseleziona tutto</button>
+          </div>
+        )}
+
+        {/* Body: mappa + pannello */}
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          <div ref={mapRef} style={{ flex: 1 }} />
+
+          {/* Pannello laterale */}
+          <div style={{ width: 300, background: 'var(--bg)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+            <div style={{ padding: 10, borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <input value={searchWR} onChange={e => setSearchWR(e.target.value)} placeholder="Cerca WR, indirizzo..." style={selectStyle} />
+              <select value={filtroCentrale} onChange={e => setFiltroCentrale(e.target.value)} style={selectStyle}>
+                <option value="">Tutte le centrali</option>
+                {centrali.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select value={filtroComune} onChange={e => setFiltroComune(e.target.value)} style={selectStyle}>
+                <option value="">Tutti i comuni</option>
+                {comuni.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'right' }}>{wrFiltrati.length} WR</div>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              {wrFiltrati.map((w, i) => {
+                const hasCoord = parseFloat(w.Latitudine) && parseFloat(w.Longitudine);
+                const isSel = selected.has(String(w.WR));
+                const sqInfo = wrToSquadra[String(w.WR)];
+                return (
+                  <div key={i} style={{ padding: '7px 10px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, background: isSel ? 'rgba(245,158,11,0.1)' : 'transparent', cursor: 'pointer', borderLeft: sqInfo ? `3px solid ${sqInfo.color}` : '3px solid transparent' }}
+                    onClick={() => toggleSelect(String(w.WR))}>
+                    <input type="checkbox" checked={isSel} onChange={() => {}} style={{ flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: isSel ? 'var(--accent2)' : sqInfo ? sqInfo.color : 'var(--accent)' }}>{w.WR}</div>
+                      <div style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.Indirizzo}, {w.Localita}</div>
+                      {sqInfo && <div style={{ fontSize: 9, color: sqInfo.color }}>{sqInfo.nome}</div>}
+                    </div>
+                    {hasCoord
+                      ? <span onClick={e => { e.stopPropagation(); cercaSuMappa(w); }} title="Vai sulla mappa" style={{ color: 'var(--green)', fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>◎</span>
+                      : <span title="Nessuna coordinata" style={{ color: 'var(--muted)', fontSize: 11, flexShrink: 0 }}>—</span>
+                    }
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
   const wrFiltrati = wr.filter(w => {
     if (filtroCentrale && w.Centrale !== filtroCentrale) return false;
@@ -285,7 +497,7 @@ export default function SubDashboard({ previewMode }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
-      {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} subCode={subCode} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} />}
+      {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} subCode={subCode} miniSquadre={miniSquadre} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} />}
       {selectedWR && <PopupWR w={selectedWR} onClose={() => setSelectedWR(null)} />}
 
       {/* Topbar */}

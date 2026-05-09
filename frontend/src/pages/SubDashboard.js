@@ -184,16 +184,15 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
         const sqNome = wrToSquadra[String(w.WR)]?.nome || '';
         let marker;
         if (isInferred) {
-          // Quadrato per coordinate inferite
-          const size = 12;
-          const icon = L.divIcon({
-            className: '',
-            html: `<div style="width:${size}px;height:${size}px;background:${color};border:2px solid white;opacity:0.8;cursor:pointer;transform:rotate(45deg)"></div>`,
-            iconSize: [size, size],
-            iconAnchor: [size/2, size/2],
-            popupAnchor: [0, -size/2]
-          });
-          marker = L.marker([lat, lon], { icon })
+          // Rombo per coordinate inferite - usa circleMarker con stile diverso
+          marker = L.circleMarker([lat, lon], {
+            radius: 8,
+            fillColor: color,
+            color: '#f59e0b',
+            weight: 3,
+            fillOpacity: 0.6,
+            dashArray: '4,2'
+          })
             .addTo(map)
             .bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:${color}">WR ${w.WR}</b><br/>${w.Indirizzo||''}, ${w.Localita||''}<br/>Stato: <b>${w.StatoWR}</b><br/><span style="color:#f59e0b">⚠ Posizione approssimativa (${w.Localita||w.Centrale})</span>${sqNome ? `<br/><span style="color:${color}">■ ${sqNome}</span>` : ''}</div>`);
         } else {

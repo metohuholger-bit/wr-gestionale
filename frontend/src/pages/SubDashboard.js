@@ -84,8 +84,8 @@ function PraticheList() {
     navigator.clipboard.writeText(url);
   };
 
-  const oltre90 = wr.filter(w => isOld(w.data_inizio)).length;
-  const nonAssegnate = wr.filter(w => !getAssignedSquad(w.wr)).length;
+  const oltre90 = wr.filter(w => isOld(w.Datadispaccio)).length;
+  const nonAssegnate = wr.filter(w => !getAssignedSquad(w.WR)).length;
 
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 48px)', overflow: 'hidden' }}>
@@ -149,29 +149,29 @@ function PraticheList() {
             </thead>
             <tbody>
               {wr.map((w, i) => {
-                const sq = getAssignedSquad(w.wr);
-                const old = isOld(w.data_inizio);
+                const sq = getAssignedSquad(w.WR);
+                const old = isOld(w.Datadispaccio);
                 return (
                   <tr key={i}
-                    onClick={() => toggleRow(w.wr)}
+                    onClick={() => toggleRow(w.WR)}
                     style={{
                       borderTop: '1px solid var(--border)',
-                      background: selected.has(w.wr) ? 'rgba(59,130,246,0.08)' : 'transparent',
+                      background: selected.has(w.WR) ? 'rgba(59,130,246,0.08)' : 'transparent',
                       cursor: 'pointer'
                     }}
                   >
                     <td style={{ padding: '6px 10px' }}>
-                      <input type="checkbox" checked={selected.has(w.wr)} onChange={() => {}} />
+                      <input type="checkbox" checked={selected.has(w.WR)} onChange={() => {}} />
                     </td>
-                    <td style={{ padding: '6px 10px', fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--accent)' }}>{w.wr}</td>
+                    <td style={{ padding: '6px 10px', fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--accent)' }}>{w.WR}</td>
                     <td style={{ padding: '6px 10px', fontSize: '12px', maxWidth: 160, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {w.indirizzo}
+                      {w.Indirizzo}, {w.Localita}
                     </td>
-                    <td style={{ padding: '6px 10px', fontSize: '11px', color: 'var(--muted)' }}>{w.data_inizio}</td>
+                    <td style={{ padding: '6px 10px', fontSize: '11px', color: 'var(--muted)' }}>{w.Datadispaccio}</td>
                     <td style={{ padding: '6px 10px' }}>
                       {old
                         ? <span style={{ fontSize: '10px', padding: '2px 5px', background: 'rgba(239,68,68,0.15)', color: 'var(--red)', borderRadius: '4px' }}>+90gg</span>
-                        : <span style={{ fontSize: '10px', padding: '2px 5px', background: 'rgba(34,197,94,0.15)', color: 'var(--green)', borderRadius: '4px' }}>{w.stato || 'COS'}</span>
+                        : <span style={{ fontSize: '10px', padding: '2px 5px', background: 'rgba(34,197,94,0.15)', color: 'var(--green)', borderRadius: '4px' }}>{w.StatoWR || 'N/D'}</span>
                       }
                     </td>
                     <td style={{ padding: '6px 10px' }}>

@@ -51,17 +51,17 @@ export default function PublicView() {
                 padding: '12px 16px',
                 borderBottom: '1px solid var(--border)',
                 cursor: 'pointer',
-                background: selected?.wr === w.wr ? 'rgba(59,130,246,0.1)' : 'transparent',
-                borderLeft: selected?.wr === w.wr ? '3px solid var(--accent)' : '3px solid transparent'
+                background: selected?.WR === w.WR ? 'rgba(59,130,246,0.1)' : 'transparent',
+                borderLeft: selected?.WR === w.WR ? '3px solid var(--accent)' : '3px solid transparent'
               }}
             >
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent)', marginBottom: 2 }}>WR {w.wr}</div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent)', marginBottom: 2 }}>WR {w.WR}</div>
               <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {w.indirizzo}
+                {w.Indirizzo}, {w.Localita}
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={{ fontSize: 10, padding: '2px 5px', background: 'rgba(34,197,94,0.15)', color: 'var(--green)', borderRadius: 3 }}>{w.stato || 'COS'}</span>
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>{w.data_inizio}</span>
+                <span style={{ fontSize: 10, padding: '2px 5px', background: 'rgba(34,197,94,0.15)', color: 'var(--green)', borderRadius: 3 }}>{w.StatoWR || 'N/D'}</span>
+                <span style={{ fontSize: 10, color: 'var(--muted)' }}>{w.Datadispaccio}</span>
               </div>
             </div>
           ))}
@@ -70,20 +70,20 @@ export default function PublicView() {
         {/* Dettaglio */}
         {selected ? (
           <div style={{ flex: 1, padding: 24, overflow: 'auto' }}>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 16, color: 'var(--accent)', marginBottom: 4 }}>WR {selected.wr}</div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 16, color: 'var(--accent)', marginBottom: 4 }}>WR {selected.WR}</div>
             <div style={{ fontSize: 12, color: 'var(--accent2)', fontWeight: 500, marginBottom: 16 }}>
-              DISPACCIO {selected.data_inizio}
+              DISPACCIO {selected.Datadispaccio}
             </div>
 
             {[
-              ['Tipo', selected.tipo],
-              ['Indirizzo', `${selected.indirizzo}, ${selected.citta}`],
-              ['Richiedente', selected.richiedente],
-              ['Telefono', selected.telefono],
-              ['N° Pali', selected.pali],
-              ['Centrale', selected.centrale],
-              ['Stato', selected.stato],
-              ['Fine lavori', selected.data_fine],
+              ['Tipo', selected.JobType],
+              ['Indirizzo', `${selected.Indirizzo}, ${selected.Localita}`],
+              ['Assistente', selected.Assistente],
+              ['Recapito', selected.Recapito],
+              ['N° Pali', selected.Pali],
+              ['Centrale', selected.Desc_Centrale],
+              ['Stato', selected.StatoWR],
+              ['Note', selected.Note],
             ].filter(([, v]) => v).map(([label, val], i) => (
               <div key={i} style={{ display: 'flex', gap: 12, marginBottom: 10, fontSize: 13 }}>
                 <span style={{ color: 'var(--muted)', minWidth: 100, fontSize: 12 }}>{label}</span>
@@ -91,11 +91,10 @@ export default function PublicView() {
               </div>
             ))}
 
-            {/* Pulsanti azione */}
             <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
-              {selected.lat && selected.lon && (
+              {selected.Latitudine && selected.Longitudine && (
                 <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${selected.lat},${selected.lon}`}
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${selected.Latitudine},${selected.Longitudine}`}
                   target="_blank"
                   rel="noreferrer"
                   style={{

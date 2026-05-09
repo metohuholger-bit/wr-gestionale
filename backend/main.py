@@ -21,12 +21,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.middleware("http")
-async def add_coop_header(request, call_next):
-    response = await call_next(request)
-    response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
-    return response
-
 # ── DATABASE ──
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
 client = AsyncIOMotorClient(MONGO_URL)
@@ -73,8 +67,7 @@ def root():
 async def google_auth(req: GoogleAuthRequest):
     async with httpx.AsyncClient() as client_http:
         r = await client_http.get(
-            "https://www.googleapis.com/oauth2/v3/userinfo",
-            headers={"Authorization": f"Bearer {req.token}"}
+            f"https://oauth2.googleapis.com/tokeninfo?id_token={req.token}"
         )
         if r.status_code != 200:
             raise HTTPException(status_code=401, detail="Token Google non valido")
@@ -132,23 +125,22 @@ async def get_wr(user=Depends(get_current_user)):
     if not SHEET_CSV_URL:
         return []
     async with httpx.AsyncClient() as c:
-        r = await c.get(SHEET_CSV_URL)
+        r = await c.get(SHEET_CSV_URL, follow_redirects=True)
     rows = []
     lines = r.text.strip().split("\n")
-    headers = [h.strip().lower() for h in lines[0].split(",")]
+    headers = [h.strip() for h in lines[0].split(",")]
     for line in lines[1:]:
         vals = line.split(",")
         row = {headers[i]: vals[i].strip() if i < len(vals) else "" for i in range(len(headers))}
         rows.append(row)
 
-    # Filtra per ruolo
+    # Filtra per ruolo usando colonna "Sq"
     if user["role"] == "sub":
-        rows = [r for r in rows if r.get("squadra") == user.get("sub_code")]
+        rows = [r for r in rows if r.get("Sq") == user.get("sub_code")]
     elif user["role"] == "squad":
-        # Trova mini-squadra dell'utente e filtra WR assegnate
         sq = await db.mini_squadre.find_one({"link_token": user.get("squad_token")})
         if sq:
-            rows = [r for r in rows if r.get("wr") in sq.get("wr_list", [])]
+            rows = [r for r in rows if r.get("WR") in sq.get("wr_list", [])]
         else:
             rows = []
 
@@ -197,14 +189,14 @@ async def public_view(token: str):
     if not SHEET_CSV_URL:
         return {"squadra": sq["nome"], "wr": []}
     async with httpx.AsyncClient() as c:
-        r = await c.get(SHEET_CSV_URL)
+        r = await c.get(SHEET_CSV_URL, follow_redirects=True)
     lines = r.text.strip().split("\n")
-    headers = [h.strip().lower() for h in lines[0].split(",")]
+    headers = [h.strip() for h in lines[0].split(",")]
     rows = []
     for line in lines[1:]:
         vals = line.split(",")
         row = {headers[i]: vals[i].strip() if i < len(vals) else "" for i in range(len(headers))}
-        if row.get("wr") in sq.get("wr_list", []):
+        if row.get("WR") in sq.get("wr_list", []):
             rows.append(row)
     return {"squadra": sq["nome"], "sub_code": sq["sub_code"], "wr": rows}
 

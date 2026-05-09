@@ -35,16 +35,16 @@ function DashboardHome() {
 
   const oggi = new Date();
   const oltre90 = wr.filter(w => {
-    if (!w.data_inizio) return false;
-    const [d, m, y] = w.data_inizio.split('/');
+    if (!w.Datadispaccio) return false;
+    const [d, m, y] = w.Datadispaccio.split('/');
     const data = new Date(y, m - 1, d);
     return (oggi - data) / (1000 * 60 * 60 * 24) > 90;
   });
 
   const subMap = {};
   wr.forEach(w => {
-    if (!subMap[w.squadra]) subMap[w.squadra] = 0;
-    subMap[w.squadra]++;
+    if (!subMap[w.Sq]) subMap[w.Sq] = 0;
+    subMap[w.Sq]++;
   });
 
   return (
@@ -95,8 +95,8 @@ function DashboardHome() {
           <tbody>
             {Object.entries(subMap).map(([cod, count], i) => {
               const old = wr.filter(w => {
-                if (w.squadra !== cod || !w.data_inizio) return false;
-                const [d, m, y] = w.data_inizio.split('/');
+                if (w.Sq !== cod || !w.Datadispaccio) return false;
+                const [d, m, y] = w.Datadispaccio.split('/');
                 return (oggi - new Date(y, m - 1, d)) / (1000 * 60 * 60 * 24) > 90;
               }).length;
               const sqs = squadre.filter(s => s.sub_code === cod).length;

@@ -308,7 +308,14 @@ export default function SubDashboard({ previewMode }) {
   const subCode = previewMode?.subCode || user?.sub_code;
 
   useEffect(() => {
-    if (previewMode) return; // usa dati già passati
+    if (previewMode) {
+      // In preview mode carica mini-squadre filtrate per sub_code
+      axios.get(`${API}/mini-squadre?sub_code=${previewMode.subCode}`)
+        .then(r => setMiniSquadre(r.data))
+        .catch(() => {})
+        .finally(() => setLoading(false));
+      return;
+    }
     Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/mini-squadre`)])
       .then(([wrR, sqR]) => {
         setWr(wrR.data.filter(w => !STATI_ESCLUSI.includes(w.StatoWR?.toUpperCase())));

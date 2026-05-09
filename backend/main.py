@@ -167,10 +167,13 @@ async def get_wr(user=Depends(get_current_user)):
 
 # ── MINI-SQUADRE ──
 @app.get("/mini-squadre")
-async def get_mini_squadre(user=Depends(get_current_user)):
+async def get_mini_squadre(user=Depends(get_current_user), sub_code: str = None):
     if user["role"] not in ["admin", "sub"]:
         raise HTTPException(status_code=403)
-    filter_q = {} if user["role"] == "admin" else {"sub_code": user["sub_code"]}
+    if user["role"] == "admin":
+        filter_q = {"sub_code": sub_code} if sub_code else {}
+    else:
+        filter_q = {"sub_code": user["sub_code"]}
     cursor = db.mini_squadre.find(filter_q, {"_id": 0})
     return await cursor.to_list(length=100)
 

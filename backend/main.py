@@ -66,28 +66,12 @@ def root():
 @app.post("/auth/google")
 async def google_auth(req: GoogleAuthRequest):
     async with httpx.AsyncClient() as client_http:
-        # Scambia il code con i token
-        token_r = await client_http.post(
-            "https://oauth2.googleapis.com/token",
-            data={
-                "code": req.token,
-                "client_id": GOOGLE_CLIENT_ID,
-                "client_secret": os.getenv("GOOGLE_CLIENT_SECRET", ""),
-                "redirect_uri": os.getenv("FRONTEND_URL", "https://wr-gestionale-main.onrender.com") + "/login",
-                "grant_type": "authorization_code"
-            }
-        )
-        if token_r.status_code != 200:
-            raise HTTPException(status_code=401, detail="Token Google non valido")
-        tokens = token_r.json()
-        access_token = tokens.get("access_token")
-
         r = await client_http.get(
             "https://www.googleapis.com/oauth2/v3/userinfo",
-            headers={"Authorization": f"Bearer {access_token}"}
+            headers={"Authorization": f"Bearer {req.token}"}
         )
         if r.status_code != 200:
-            raise HTTPException(status_code=401, detail="Utente non trovato")
+            raise HTTPException(status_code=401, detail="Token Google non valido")
         info = r.json()
 
     email = info.get("email")

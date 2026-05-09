@@ -84,7 +84,9 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
       const sq = wrToSquadra[String(w.WR)];
       if (!sq || sq.token !== filtroSquadra) return false;
     }
-    if (filtroMiniSquadra) {
+    if (filtroMiniSquadra === '__assegnate__') {
+      if (!wrToSquadra[String(w.WR)]) return false;
+    } else if (filtroMiniSquadra) {
       const sq = wrToSquadra[String(w.WR)];
       if (!sq || sq.token !== filtroMiniSquadra) return false;
     }
@@ -121,7 +123,9 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
       }
       if (filtroCentrale && !w.Centrale?.toLowerCase().includes(filtroCentrale.toLowerCase())) visible = false;
       if (filtroComune && w.Localita !== filtroComune) visible = false;
-      if (filtroMiniSquadra) {
+      if (filtroMiniSquadra === '__assegnate__') {
+        if (!wrToSquadra[wrNum]) visible = false;
+      } else if (filtroMiniSquadra) {
         const sq = wrToSquadra[wrNum];
         if (!sq || sq.token !== filtroMiniSquadra) visible = false;
       }
@@ -284,7 +288,8 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
                 {comuni.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
               <select value={filtroMiniSquadra} onChange={e => setFiltroMiniSquadra(e.target.value)} style={selectStyle}>
-                <option value="">Tutte le mini-squadre</option>
+                <option value="">Tutte le WR</option>
+                <option value="__assegnate__">Tutte le squadre (assegnate)</option>
                 {miniSquadre.map(sq => <option key={sq.link_token} value={sq.link_token}>{sq.nome}</option>)}
               </select>
               <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'right' }}>{wrFiltrati.length} WR</div>

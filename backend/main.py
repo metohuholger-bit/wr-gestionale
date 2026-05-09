@@ -179,9 +179,13 @@ async def create_mini_squadra(sq: MiniSquadra, user=Depends(get_current_user)):
     if user["role"] not in ["admin", "sub"]:
         raise HTTPException(status_code=403)
     token = secrets.token_urlsafe(8)
+    # Admin usa sub_code dal body, sub usa il suo
+    sub_code = user["sub_code"] if user["role"] == "sub" else sq.sub_code
+    if not sub_code:
+        raise HTTPException(status_code=400, detail="sub_code mancante")
     doc = {
         "nome": sq.nome,
-        "sub_code": user["sub_code"] if user["role"] == "sub" else sq.sub_code,
+        "sub_code": sub_code,
         "wr_list": sq.wr_list,
         "link_token": token,
         "created_at": datetime.utcnow()

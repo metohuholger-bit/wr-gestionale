@@ -57,6 +57,7 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
   const [filtroCentrale, setFiltroCentrale] = useState('');
   const [filtroComune, setFiltroComune] = useState('');
   const [filtroSquadra, setFiltroSquadra] = useState(null); // null = tutte
+  const [filtroMiniSquadra, setFiltroMiniSquadra] = useState('');
 
   const COLORI = ['#f59e0b', '#22c55e', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#06b6d4', '#a855f7'];
 
@@ -77,11 +78,15 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
   };
 
   const wrFiltrati = wr.filter(w => {
-    if (filtroCentrale && w.Centrale !== filtroCentrale) return false;
+    if (filtroCentrale && !w.Centrale?.toLowerCase().includes(filtroCentrale.toLowerCase())) return false;
     if (filtroComune && w.Localita !== filtroComune) return false;
     if (filtroSquadra) {
       const sq = wrToSquadra[String(w.WR)];
       if (!sq || sq.token !== filtroSquadra) return false;
+    }
+    if (filtroMiniSquadra) {
+      const sq = wrToSquadra[String(w.WR)];
+      if (!sq || sq.token !== filtroMiniSquadra) return false;
     }
     if (searchWR) {
       const q = searchWR.toLowerCase();
@@ -250,13 +255,14 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
           <div style={{ width: 300, background: 'var(--bg)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
             <div style={{ padding: 10, borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
               <input value={searchWR} onChange={e => setSearchWR(e.target.value)} placeholder="Cerca WR, indirizzo..." style={selectStyle} />
-              <select value={filtroCentrale} onChange={e => setFiltroCentrale(e.target.value)} style={selectStyle}>
-                <option value="">Tutte le centrali</option>
-                {centrali.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <input value={filtroCentrale} onChange={e => setFiltroCentrale(e.target.value)} placeholder="Cerca centrale (es. 575)..." style={selectStyle} />
               <select value={filtroComune} onChange={e => setFiltroComune(e.target.value)} style={selectStyle}>
                 <option value="">Tutti i comuni</option>
                 {comuni.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select value={filtroMiniSquadra} onChange={e => setFiltroMiniSquadra(e.target.value)} style={selectStyle}>
+                <option value="">Tutte le mini-squadre</option>
+                {miniSquadre.map(sq => <option key={sq.link_token} value={sq.link_token}>{sq.nome}</option>)}
               </select>
               <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'right' }}>{wrFiltrati.length} WR</div>
             </div>

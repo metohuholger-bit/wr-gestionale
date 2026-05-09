@@ -260,12 +260,22 @@ function DashboardHome() {
   };
 
   const oltre90 = wr.filter(w => isOld(w.Datadispaccio)).length;
+  const [tipoFiltro, setTipoFiltro] = useState('tutti'); // 'tutti' | 'sub' | 'interne'
 
   const subMap = {};
   wr.forEach(w => {
     const sq = w.Sq || 'N/D';
     if (!subMap[sq]) subMap[sq] = [];
     subMap[sq].push(w);
+  });
+
+  const isSub = (cod) => cod.startsWith('S') && isNaN(cod.slice(1)) === false || /^S\d+/.test(cod);
+  const isInterna = (cod) => /^\d+$/.test(cod);
+
+  const filteredSubMap = Object.entries(subMap).filter(([cod]) => {
+    if (tipoFiltro === 'sub') return /^S\d+/.test(cod);
+    if (tipoFiltro === 'interne') return /^\d+$/.test(cod);
+    return true;
   });
 
   const wrSquadra = selectedSquadra ? (subMap[selectedSquadra] || []) : [];
@@ -293,8 +303,16 @@ function DashboardHome() {
         ))}
       </div>
 
-      <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--muted)', marginBottom: '10px' }}>
+      <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--muted)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: 12 }}>
         WR per squadra/sub — clicca per vedere le pratiche
+        <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
+          {[['tutti','Tutti'],['sub','Sub (S...)'],['interne','Squadre interne']].map(([val, label]) => (
+            <button key={val} onClick={() => setTipoFiltro(val)}
+              style={{ padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer', border: '1px solid var(--border)', background: tipoFiltro === val ? 'var(--accent)' : 'var(--bg)', color: tipoFiltro === val ? 'white' : 'var(--muted)' }}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
       <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -306,7 +324,7 @@ function DashboardHome() {
             </tr>
           </thead>
           <tbody>
-            {Object.entries(subMap).sort((a, b) => b[1].length - a[1].length).map(([cod, wrs], i) => {
+            {filteredSubMap.sort((a, b) => b[1].length - a[1].length).map(([cod, wrs], i) => {
               const old = wrs.filter(w => isOld(w.Datadispaccio)).length;
               const coord = wrs.filter(w => parseFloat(w.Latitudine) && parseFloat(w.Longitudine)).length;
               const nome = wrs[0]?.Descrizione_Sq || '—';

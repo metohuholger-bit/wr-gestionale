@@ -105,14 +105,18 @@ export default function Pratiche() {
     return (oggi - date) / (1000 * 60 * 60 * 24) > 90;
   };
 
+  const [filtroDescCentrale, setFiltroDescCentrale] = useState('');
+
   const squadre = [...new Set(wr.map(w => w.Sq).filter(Boolean))].sort();
   const stati = [...new Set(wr.map(w => w.StatoWR).filter(Boolean))].sort();
   const centrali = [...new Set(wr.map(w => w.Centrale).filter(Boolean))].sort();
+  const descCentrali = [...new Set(wr.map(w => w.Desc_Centrale).filter(Boolean))].sort();
 
   const filtered = wr.filter(w => {
     if (filtroSq && w.Sq !== filtroSq) return false;
     if (filtroStato && w.StatoWR !== filtroStato) return false;
     if (filtroCentrale && w.Centrale !== filtroCentrale) return false;
+    if (filtroDescCentrale && w.Desc_Centrale !== filtroDescCentrale) return false;
     if (filtro90 && !isOld(w.Datadispaccio)) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -144,7 +148,7 @@ export default function Pratiche() {
 
   const resetFiltri = () => {
     setSearch(''); setFiltroSq(''); setFiltroStato('');
-    setFiltroCentrale(''); setFiltro90(false); setPage(1);
+    setFiltroCentrale(''); setFiltroDescCentrale(''); setFiltro90(false); setPage(1);
   };
 
   if (loading) return <div style={{ padding: 40, color: 'var(--muted)', textAlign: 'center' }}>Caricamento...</div>;
@@ -174,6 +178,10 @@ export default function Pratiche() {
         <select value={filtroCentrale} onChange={e => { setFiltroCentrale(e.target.value); setPage(1); }} style={selectStyle}>
           <option value="">Tutte le centrali</option>
           {centrali.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select value={filtroDescCentrale} onChange={e => { setFiltroDescCentrale(e.target.value); setPage(1); }} style={selectStyle}>
+          <option value="">Tutte le desc. centrali</option>
+          {descCentrali.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         <button onClick={() => { setFiltro90(!filtro90); setPage(1); }}
           style={{ background: filtro90 ? 'rgba(239,68,68,0.2)' : 'var(--bg)', border: `1px solid ${filtro90 ? 'var(--red)' : 'var(--border)'}`, color: filtro90 ? 'var(--red)' : 'var(--muted)', padding: '5px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>

@@ -131,13 +131,14 @@ async def get_sheet_data():
         return _sheet_cache["data"]
     async with httpx.AsyncClient() as c:
         r = await c.get(SHEET_CSV_URL, follow_redirects=True)
-    lines = r.text.strip().split("\n")
-    headers = [h.strip() for h in lines[0].split(",")]
+    import csv, io
+    reader = csv.DictReader(io.StringIO(r.text))
     rows = []
-    for line in lines[1:]:
-        vals = line.split(",")
-        row = {headers[i]: vals[i].strip() if i < len(vals) else "" for i in range(len(headers))}
-        rows.append(row)
+    for row in reader:
+        # Salta righe con WR vuoto
+        if not row.get("WR", "").strip():
+            continue
+        rows.append({k.strip(): v.strip() for k, v in row.items()})
     _sheet_cache = {"data": rows, "ts": time.time()}
     return rows
 

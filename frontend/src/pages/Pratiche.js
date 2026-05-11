@@ -269,6 +269,7 @@ export default function Pratiche() {
   };
 
   const [filtroDescCentrale, setFiltroDescCentrale] = useState('');
+  const [filtroDiscriminante, setFiltroDiscriminante] = useState('');
 
   const squadre = [...new Set(wr.map(w => w.Sq).filter(Boolean))].sort();
   const stati = [...new Set(wr.map(w => w.StatoWR).filter(Boolean))].sort();
@@ -280,6 +281,7 @@ export default function Pratiche() {
     if (filtroStato && w.StatoWR !== filtroStato) return false;
     if (filtroCentrale && !w.Centrale?.toLowerCase().includes(filtroCentrale.toLowerCase())) return false;
     if (filtroDescCentrale && !w.Desc_Centrale?.toLowerCase().includes(filtroDescCentrale.toLowerCase())) return false;
+    if (filtroDiscriminante && !w.Discriminante?.toLowerCase().includes(filtroDiscriminante.toLowerCase())) return false;
     if (filtro90 && !isOld(w.Datadispaccio)) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -305,7 +307,7 @@ export default function Pratiche() {
 
   const resetFiltri = () => {
     setSearch(''); setFiltroSq(''); setFiltroStato('');
-    setFiltroCentrale(''); setFiltroDescCentrale(''); setFiltro90(false); setPage(1);
+    setFiltroCentrale(''); setFiltroDescCentrale(''); setFiltroDiscriminante(''); setFiltro90(false); setPage(1);
   };
 
   if (loading) return <div style={{ padding: 40, color: 'var(--muted)', textAlign: 'center' }}>Caricamento...</div>;

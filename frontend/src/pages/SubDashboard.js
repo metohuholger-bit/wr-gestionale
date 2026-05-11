@@ -58,6 +58,7 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
   const [filtroComune, setFiltroComune] = useState('');
   const [filtroMiniSquadra, setFiltroMiniSquadra] = useState('');
   const [filtroExtra, setFiltroExtra] = useState(null);
+  const [filtroDiscriminante, setFiltroDiscriminante] = useState('');
   const [filtroSquadra, setFiltroSquadra] = useState(null);
 
   const COLORI = ['#f59e0b', '#22c55e', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#06b6d4', '#a855f7'];
@@ -93,6 +94,7 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
       const sq = wrToSquadra[String(w.WR)];
       if (!sq || sq.token !== filtroSquadra) return false;
     }
+    if (filtroDiscriminante && !w.Discriminante?.toLowerCase().includes(filtroDiscriminante.toLowerCase())) return false;
     if (searchWR) {
       const q = searchWR.toLowerCase();
       return w.WR?.toString().includes(q) || w.Indirizzo?.toLowerCase().includes(q);
@@ -195,9 +197,10 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
       if (filtroExtra === 'avvicin') { const d = ddiff(w.Datadispaccio); if (d === null || d <= 60 || d > 90) visible = false; }
       if (filtroMiniSquadra === '__assegnate__' && !wrToSquadra[wrNum]) visible = false;
       if (filtroMiniSquadra && filtroMiniSquadra !== '__assegnate__') { const sq = wrToSquadra[wrNum]; if (!sq || sq.token !== filtroMiniSquadra) visible = false; }
+      if (filtroDiscriminante && !w.Discriminante?.toLowerCase().includes(filtroDiscriminante.toLowerCase())) visible = false;
       if (typeof marker.setStyle === 'function') marker.setStyle({ opacity: visible ? 1 : 0.05, fillOpacity: visible ? 0.9 : 0.05 });
     });
-  }, [filtroSquadra, filtroCentrale, filtroComune, filtroExtra, filtroMiniSquadra, solleciti]);
+  }, [filtroSquadra, filtroCentrale, filtroComune, filtroExtra, filtroMiniSquadra, solleciti, filtroDiscriminante]);
 
   // Inizializza mappa
   useEffect(() => {
@@ -340,6 +343,7 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
             <div style={{ padding: 10, borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
               <input value={searchWR} onChange={e => setSearchWR(e.target.value)} placeholder="Cerca WR, indirizzo..." style={selectStyle} />
               <input value={filtroCentrale} onChange={e => setFiltroCentrale(e.target.value)} placeholder="Cerca centrale (es. 575)..." style={selectStyle} />
+              <input value={filtroDiscriminante} onChange={e => setFiltroDiscriminante(e.target.value)} placeholder="Discriminante..." style={selectStyle} />
               <select value={filtroComune} onChange={e => setFiltroComune(e.target.value)} style={selectStyle}>
                 <option value="">Tutti i comuni</option>
                 {comuni.map(c => <option key={c} value={c}>{c}</option>)}
@@ -571,7 +575,8 @@ export default function SubDashboard({ previewMode }) {
   const [filtroComune, setFiltroComune] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
   const [filtroCard, setFiltroCard] = useState(null); // null | 'over90' | 'avvicin' | 'urgenti'
-  const [colFilter, setColFilter] = useState({ WR:'', StatoWR:'', Centrale:'', Desc_Centrale:'', Indirizzo:'', Localita:'', Pali:'', JobType:'', Assistente:'' });
+  const [colFilter, setColFilter] = useState({ WR:'', StatoWR:'', Centrale:'', Desc_Centrale:'', Discriminante:'', Indirizzo:'', Localita:'', Pali:'', JobType:'', Assistente:'' });
+  const [filtroDiscriminanteMappa, setFiltroDiscriminanteMappa] = useState('');
   const setCol = (col, val) => setColFilter(prev => ({ ...prev, [col]: val }));
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [nomeNuovaSquadra, setNomeNuovaSquadra] = useState('');
@@ -840,6 +845,7 @@ export default function SubDashboard({ previewMode }) {
                         { label: 'Località', col: 'Localita' },
                         { label: 'Pali', col: 'Pali' },
                         { label: 'Tipo', col: 'JobType' },
+                        { label: 'Discriminante', col: 'Discriminante' },
                         { label: 'Assistente', col: 'Assistente' },
                       ].map(({ label, col }) => (
                         <th key={label} style={{ padding: '6px 8px', textAlign: 'left', fontSize: 11, color: 'var(--muted)', fontWeight: 500, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>
@@ -879,6 +885,7 @@ export default function SubDashboard({ previewMode }) {
                           <td style={{ padding: '7px 12px', color: 'var(--muted)', whiteSpace: 'nowrap' }} onClick={() => setSelectedWR(w)}>{w.Localita}</td>
                           <td style={{ padding: '7px 12px', color: 'var(--muted)' }} onClick={() => setSelectedWR(w)}>{w.Pali || '—'}</td>
                           <td style={{ padding: '7px 12px', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--muted)' }} onClick={() => setSelectedWR(w)}>{w.JobType}</td>
+                          <td style={{ padding: '7px 12px', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#f59e0b', fontSize: 11 }} onClick={() => setSelectedWR(w)}>{w.Discriminante || '—'}</td>
                           <td style={{ padding: '7px 12px', color: 'var(--muted)', whiteSpace: 'nowrap' }} onClick={() => setSelectedWR(w)}>{w.Assistente}</td>
                           <td style={{ padding:'4px 8px' }}>
                             {(() => {

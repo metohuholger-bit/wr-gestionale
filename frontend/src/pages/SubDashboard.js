@@ -144,6 +144,42 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
     } catch (e) { console.error(e); }
   };
 
+  const aggiungiASquadra = async (token) => {
+    if (!token || selected.size === 0) return;
+    const sq = miniSquadre.find(s => s.link_token === token);
+    if (!sq) return;
+    const newList = [...new Set([...(sq.wr_list || []), ...selected])];
+    try {
+      await axios.put(`${API}/mini-squadre/${token}/wr`, newList);
+      const color = COLORI[miniSquadre.indexOf(sq) % COLORI.length];
+      selected.forEach(wrNum => {
+        const m = markersRef.current[wrNum];
+        if (m && typeof m.setStyle === 'function') { m.setStyle({ fillColor: color, weight: 3 }); m.off('click'); }
+      });
+      onSquadraCreata({ ...sq, wr_list: newList }); // aggiorna parent
+      setSelected(new Set());
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) { console.error(e); }
+  };
+
+  const rimuoviDaSquadra = async (wrNum) => {
+    const sqInfo = wrToSquadra[wrNum];
+    if (!sqInfo) return;
+    const sq = miniSquadre.find(s => s.link_token === sqInfo.token);
+    if (!sq) return;
+    const newList = sq.wr_list.filter(w => w !== wrNum);
+    try {
+      await axios.put(`${API}/mini-squadre/${sqInfo.token}/wr`, newList);
+      const m = markersRef.current[wrNum];
+      if (m && typeof m.setStyle === 'function') {
+        m.setStyle({ fillColor: '#3b82f6', weight: 2 });
+        m.on('click', () => toggleSelect(wrNum));
+      }
+      onSquadraCreata({ ...sq, wr_list: newList });
+    } catch (e) { console.error(e); }
+  };
+
   // Aggiorna visibilità marker quando cambiano i filtri
   useEffect(() => {
     if (!mapInstanceRef.current) return;
@@ -267,19 +303,31 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
           <button onClick={onClose} style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer' }}>×</button>
         </div>
 
-        {/* Crea squadra bar */}
+        {/* Crea / Aggiungi squadra bar */}
         {selected.size > 0 && (
-          <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border)', background: 'rgba(245,158,11,0.08)', display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
-            <span style={{ fontSize: 12, color: 'var(--accent2)' }}>🟡 {selected.size} WR selezionate:</span>
-            <input value={nomeSquadra} onChange={e => setNomeSquadra(e.target.value)} placeholder="Nome squadra..."
-              style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 10px', borderRadius: 6, fontSize: 12, outline: 'none', width: 180 }} />
+          <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border)', background: 'rgba(245,158,11,0.08)', display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: 'var(--accent2)', flexShrink: 0 }}>🟡 {selected.size} selezionate:</span>
+            {/* Crea nuova */}
+            <input value={nomeSquadra} onChange={e => setNomeSquadra(e.target.value)} placeholder="Nome nuova squadra..."
+              style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 10px', borderRadius: 6, fontSize: 12, outline: 'none', width: 160 }} />
             <button onClick={creaSquadra} disabled={!nomeSquadra}
-              style={{ background: nomeSquadra ? 'rgba(245,158,11,0.2)' : 'var(--bg)', border: `1px solid ${nomeSquadra ? 'var(--accent2)' : 'var(--border)'}`, color: nomeSquadra ? 'var(--accent2)' : 'var(--muted)', padding: '5px 12px', borderRadius: 6, fontSize: 12, cursor: nomeSquadra ? 'pointer' : 'not-allowed' }}>
-              Crea e copia link
+              style={{ background: nomeSquadra ? 'rgba(245,158,11,0.2)' : 'var(--bg)', border: `1px solid ${nomeSquadra ? 'var(--accent2)' : 'var(--border)'}`, color: nomeSquadra ? 'var(--accent2)' : 'var(--muted)', padding: '5px 10px', borderRadius: 6, fontSize: 12, cursor: nomeSquadra ? 'pointer' : 'not-allowed', flexShrink: 0 }}>
+              + Crea
             </button>
-            {saved && <span style={{ fontSize: 12, color: 'var(--green)' }}>✓ Link copiato!</span>}
+            {/* Aggiungi a esistente */}
+            {miniSquadre.length > 0 && (
+              <>
+                <span style={{ fontSize: 11, color: 'var(--muted)', flexShrink: 0 }}>oppure aggiungi a:</span>
+                <select onChange={e => e.target.value && aggiungiASquadra(e.target.value)} defaultValue=""
+                  style={{ background: 'var(--bg)', border: '1px solid var(--accent)', color: 'var(--accent)', padding: '5px 8px', borderRadius: 6, fontSize: 12, outline: 'none' }}>
+                  <option value="">Scegli squadra...</option>
+                  {miniSquadre.map(sq => <option key={sq.link_token} value={sq.link_token}>{sq.nome}</option>)}
+                </select>
+              </>
+            )}
+            {saved && <span style={{ fontSize: 12, color: 'var(--green)', flexShrink: 0 }}>✓ Salvato!</span>}
             <button onClick={() => { setSelected(new Set()); Object.entries(markersRef.current).forEach(([wrNum, m]) => { if (typeof m.setStyle === 'function') m.setStyle({ fillColor: wrToSquadra[wrNum]?.color || '#3b82f6' }); }); }}
-              style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 12, cursor: 'pointer' }}>Deseleziona tutto</button>
+              style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', marginLeft: 'auto' }}>✕ Deseleziona</button>
           </div>
         )}
 
@@ -310,7 +358,7 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
                 const sqInfo = wrToSquadra[String(w.WR)];
                 const isAssigned = !!sqInfo;
                 return (
-                  <div key={i} style={{ padding: '7px 10px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, background: isSel ? 'rgba(245,158,11,0.1)' : isAssigned ? 'rgba(0,0,0,0.1)' : 'transparent', cursor: isAssigned ? 'not-allowed' : 'pointer', borderLeft: sqInfo ? `3px solid ${sqInfo.color}` : '3px solid transparent', opacity: isAssigned ? 0.7 : 1 }}
+                  <div key={i} style={{ padding: '7px 10px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, background: isSel ? 'rgba(245,158,11,0.1)' : isAssigned ? 'rgba(0,0,0,0.1)' : 'transparent', cursor: 'pointer', borderLeft: sqInfo ? `3px solid ${sqInfo.color}` : '3px solid transparent' }}
                     onClick={() => !isAssigned && toggleSelect(String(w.WR))}>
                     <input type="checkbox" checked={isSel} disabled={isAssigned} onChange={() => {}} style={{ flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -318,12 +366,19 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
                       <div style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.Indirizzo}, {w.Localita}</div>
                       {sqInfo && <div style={{ fontSize: 9, color: sqInfo.color, fontWeight: 600 }}>■ {sqInfo.nome}</div>}
                     </div>
-                    {hasCoord
-                      ? <span onClick={e => { e.stopPropagation(); cercaSuMappa(w); }} title="Vai sulla mappa" style={{ color: 'var(--green)', fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>◎</span>
-                      : w.CoordInferita
-                        ? <span onClick={e => { e.stopPropagation(); cercaSuMappa(w); }} title="Posizione approssimativa" style={{ color: 'var(--accent2)', fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>◇</span>
-                        : <span title="Nessuna coordinata" style={{ color: 'var(--muted)', fontSize: 11, flexShrink: 0 }}>—</span>
-                    }
+                    <div style={{ display:'flex', gap:4, flexShrink:0, alignItems:'center' }}>
+                      {hasCoord
+                        ? <span onClick={e => { e.stopPropagation(); cercaSuMappa(w); }} title="Vai sulla mappa" style={{ color: 'var(--green)', fontSize: 13, cursor: 'pointer' }}>◎</span>
+                        : w.CoordInferita
+                          ? <span onClick={e => { e.stopPropagation(); cercaSuMappa(w); }} title="Posizione approssimativa" style={{ color: 'var(--accent2)', fontSize: 13, cursor: 'pointer' }}>◇</span>
+                          : <span title="Nessuna coordinata" style={{ color: 'var(--muted)', fontSize: 11 }}>—</span>
+                      }
+                      {isAssigned && (
+                        <button onClick={e => { e.stopPropagation(); rimuoviDaSquadra(String(w.WR)); }}
+                          title={`Rimuovi da ${sqInfo.nome}`}
+                          style={{ background: 'transparent', border: 'none', color: 'var(--red)', fontSize: 14, cursor: 'pointer', padding: '0 2px' }}>×</button>
+                      )}
+                    </div>
                   </div>
                 );
               })}

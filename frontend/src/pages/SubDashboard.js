@@ -326,6 +326,66 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
   );
 }
 
+
+// ── POPUP SOLLECITI ──
+function SollicitiPopup({ solleciti, wr, onClose, onSelectWR }) {
+  const [search, setSearch] = React.useState('');
+  const filtered = solleciti.filter(s => {
+    if (!search) return true;
+    const w = wr.find(r => String(r.WR) === String(s.wr));
+    return String(s.wr).includes(search) || w?.Indirizzo?.toLowerCase().includes(search.toLowerCase()) || w?.Localita?.toLowerCase().includes(search.toLowerCase());
+  });
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:'var(--panel)', border:'1px solid rgba(236,72,153,0.3)', borderRadius:12, width:520, maxHeight:'80vh', display:'flex', flexDirection:'column', boxShadow:'0 0 40px rgba(236,72,153,0.1)' }}>
+        <div style={{ padding:'14px 18px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{ fontSize:20 }}>⚡</span>
+          <div>
+            <div style={{ fontSize:9, fontFamily:'var(--mono)', letterSpacing:3, color:'var(--muted)' }}>PRATICHE SOLLECITATE DA MDS</div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#ec4899' }}>{solleciti.length} sollecit{solleciti.length === 1 ? 'o' : 'i'}</div>
+          </div>
+          <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', color:'var(--muted)', fontSize:20, cursor:'pointer' }}>×</button>
+        </div>
+        <div style={{ padding:'10px 16px', borderBottom:'1px solid var(--border)' }}>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Filtra per WR, indirizzo..."
+            style={{ width:'100%', background:'var(--bg)', border:'1px solid var(--border)', color:'var(--text)', padding:'6px 10px', borderRadius:6, fontSize:12, outline:'none' }} />
+        </div>
+        <div style={{ flex:1, overflow:'auto' }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding:24, textAlign:'center', color:'var(--muted)', fontSize:13 }}>Nessun sollecito trovato</div>
+          ) : filtered.map((s, i) => {
+            const w = wr.find(r => String(r.WR) === String(s.wr));
+            return (
+              <div key={i} onClick={() => { if(w) { onSelectWR(w); onClose(); } }}
+                style={{ padding:'12px 18px', borderBottom:'1px solid var(--border)', cursor: w ? 'pointer' : 'default', transition:'background 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(236,72,153,0.06)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:4 }}>
+                  <span style={{ fontFamily:'var(--mono)', fontSize:13, color:'#ec4899', fontWeight:700 }}>WR {s.wr}</span>
+                  <span style={{ fontFamily:'var(--mono)', fontSize:11, color:'var(--muted)' }}>{s.sub_code}</span>
+                  {s.data && <span style={{ fontSize:10, color:'var(--muted)', marginLeft:'auto' }}>{new Date(s.data).toLocaleDateString('it-IT')}</span>}
+                </div>
+                {w && <div style={{ fontSize:12, color:'var(--muted)', marginBottom:4 }}>{w.Indirizzo}, {w.Localita}</div>}
+                {w && <div style={{ display:'flex', gap:8 }}>
+                  <span style={{ fontSize:10, padding:'2px 6px', borderRadius:3, background:'rgba(34,197,94,0.1)', color:'var(--green)' }}>{w.StatoWR}</span>
+                  <span style={{ fontSize:10, color:'var(--muted)' }}>{w.Datadispaccio}</span>
+                  {w.Pali && <span style={{ fontSize:10, color:'var(--muted)' }}>• {w.Pali} pali</span>}
+                </div>}
+                {s.messaggio && (
+                  <div style={{ marginTop:8, padding:'6px 10px', background:'rgba(236,72,153,0.08)', borderRadius:5, fontSize:12, color:'#ec4899', fontStyle:'italic' }}>
+                    "{s.messaggio}"
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SubDashboard({ previewMode }) {
   const { API, user, logout } = useAuth();
   const navigate = useNavigate();
@@ -336,6 +396,7 @@ export default function SubDashboard({ previewMode }) {
   const [activeTab, setActiveTab] = useState('pratiche');
   const [selectedWR, setSelectedWR] = useState(null);
   const [solleciti, setSolleciti] = useState([]);
+  const [showSolleciti, setShowSolleciti] = useState(false);
   const [search, setSearch] = useState('');
   const [filtroStato, setFiltroStato] = useState('');
   const [filtroCentrale, setFiltroCentrale] = useState('');
@@ -469,6 +530,7 @@ export default function SubDashboard({ previewMode }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
+      {showSolleciti && <SollicitiPopup solleciti={solleciti} wr={wr} onClose={() => setShowSolleciti(false)} onSelectWR={w => { setSelectedWR(w); setActiveTab('pratiche'); }} />}
       {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} subCode={subCode} miniSquadre={miniSquadre} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} />}
       {selectedWR && <PopupWR w={selectedWR} onClose={() => setSelectedWR(null)} />}
 
@@ -498,22 +560,7 @@ export default function SubDashboard({ previewMode }) {
             </div>
           );
         })()}
-        {/* Banner solleciti */}
-        {solleciti.length > 0 && (
-          <div style={{ background:'rgba(236,72,153,0.08)', border:'1px solid rgba(236,72,153,0.3)', borderRadius:8, padding:'10px 14px', marginBottom:10 }}>
-            <div style={{ fontFamily:'monospace', fontSize:9, letterSpacing:3, color:'#ec4899', marginBottom:6, fontWeight:700 }}>⚡ PRATICHE SOLLECITATE DA MDS ({solleciti.length})</div>
-            {solleciti.map((s, i) => {
-              const w = wr.find(r => String(r.WR) === String(s.wr));
-              return (
-                <div key={i} onClick={() => w && setSelectedWR(w)} style={{ display:'flex', gap:10, alignItems:'center', padding:'5px 0', borderBottom: i < solleciti.length-1 ? '1px solid rgba(236,72,153,0.15)' : 'none', cursor: w ? 'pointer' : 'default' }}>
-                  <span style={{ fontFamily:'monospace', fontSize:12, color:'#ec4899', fontWeight:700 }}>WR {s.wr}</span>
-                  {w && <span style={{ fontSize:11, color:'#64748b' }}>{w.Indirizzo}, {w.Localita}</span>}
-                  {s.messaggio && <span style={{ fontSize:11, color:'#f59e0b', marginLeft:'auto', fontStyle:'italic' }}>"{s.messaggio}"</span>}
-                </div>
-              );
-            })}
-          </div>
-        )}
+
         {/* Card statistiche */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
           {[
@@ -563,7 +610,13 @@ export default function SubDashboard({ previewMode }) {
                 style={{ background: filtro90 ? 'rgba(239,68,68,0.2)' : 'var(--bg)', border: `1px solid ${filtro90 ? 'var(--red)' : 'var(--border)'}`, color: filtro90 ? 'var(--red)' : 'var(--muted)', padding: '5px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
                 ⚠ +90gg
               </button>
-              <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--muted)' }}><span style={{ color: 'var(--accent)', fontWeight: 600 }}>{filtered.length}</span> / {wr.length} WR</span>
+              <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:10 }}>
+                <button onClick={() => setShowSolleciti(true)} title="Pratiche sollecitate" style={{ position:'relative', background: solleciti.length > 0 ? 'rgba(236,72,153,0.1)' : 'transparent', border:`1px solid ${solleciti.length > 0 ? 'rgba(236,72,153,0.3)' : 'var(--border)'}`, color: solleciti.length > 0 ? '#ec4899' : 'var(--muted)', padding:'5px 10px', borderRadius:6, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
+                  ⚡
+                  {solleciti.length > 0 && <span style={{ fontSize:11, fontWeight:700 }}>{solleciti.length}</span>}
+                </button>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}><span style={{ color: 'var(--accent)', fontWeight: 600 }}>{filtered.length}</span> / {wr.length} WR</span>
+              </div>
             </div>
             {selectedRows.size > 0 && (
               <div style={{ padding: '8px 20px', background: 'rgba(245,158,11,0.08)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>

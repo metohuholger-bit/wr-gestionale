@@ -131,19 +131,36 @@ async def get_sheet_data():
         return _sheet_cache["data"]
     async with httpx.AsyncClient() as c:
         r = await c.get(SHEET_CSV_URL, follow_redirects=True)
-    import csv, io, re
-    reader = csv.DictReader(io.StringIO(r.text))
+    import re
+
+    # Colonne attese nell'ordine del Sheet
+    COLS = ["Area","KeyLavor","COIntervento","Assistente","JobType","WR","Network",
+            "Telefonico_BI","StatoWR","Discriminante","Sq","Descrizione_Sq","Dipendente",
+            "Attivita","Centrale","Desc_Centrale","Localita","Indirizzo","Operatore",
+            "Recapito","Datadispaccio","Pali","Note","Latitudine","Longitudine","RiepilogoPrev"]
+
     rows = []
-    for row in reader:
-        if not row.get("WR", "").strip():
+    lines = r.text.split("\n")
+    # Salta header
+    for line in lines[1:]:
+        if not line.strip():
             continue
-        clean = {k.strip(): v.strip() for k, v in row.items()}
+        parts = line.split("\t")
+        if len(parts) < 6:
+            continue
+        row = {}
+        for i, col in enumerate(COLS):
+            row[col] = parts[i].strip() if i < len(parts) else ""
+        # Verifica che WR sia un numero
+        wr_val = row.get("WR", "").strip()
+        if not wr_val or not wr_val.isdigit():
+            continue
         # Converti coordinate con virgola decimale in punto
         for col in ["Latitudine", "Longitudine"]:
-            val = clean.get(col, "")
+            val = row.get(col, "")
             if val and re.match(r'^\d+,\d+$', val):
-                clean[col] = val.replace(",", ".")
-        rows.append(clean)
+                row[col] = val.replace(",", ".")
+        rows.append(row)
     _sheet_cache = {"data": rows, "ts": time.time()}
     return rows
 

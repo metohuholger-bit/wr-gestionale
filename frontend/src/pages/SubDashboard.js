@@ -127,11 +127,20 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
       const link = `${window.location.origin}/#/view/${r.data.token}`;
       navigator.clipboard.writeText(link);
       setSaved(true);
-      onSquadraCreata({ nome: nomeSquadra, sub_code: subCode, wr_list: [...selected], link_token: r.data.token });
+      const nuovaSquadra = { nome: nomeSquadra, sub_code: subCode, wr_list: [...selected], link_token: r.data.token };
+      onSquadraCreata(nuovaSquadra);
+      // Aggiorna colori marker senza ricreare la mappa
+      const nuovoColore = '#f59e0b';
+      selected.forEach(wrNum => {
+        const m = markersRef.current[wrNum];
+        if (m && typeof m.setStyle === 'function') {
+          m.setStyle({ fillColor: nuovoColore, weight: 3 });
+          m.off('click');
+        }
+      });
       setTimeout(() => setSaved(false), 3000);
       setNomeSquadra('');
       setSelected(new Set());
-      if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; markersRef.current = {}; }
     } catch (e) { console.error(e); }
   };
 

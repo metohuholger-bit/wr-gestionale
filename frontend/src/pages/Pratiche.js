@@ -17,6 +17,77 @@ const COLONNE = [
 ];
 
 
+
+// ── CONFRONTA WR ──
+function ConfrontaWR({ wrA, wrB, onClose }) {
+  const CAMPI = [
+    ['WR','WR'],['Stato','StatoWR'],['Data','Datadispaccio'],
+    ['Squadra','Sq'],['Desc. Squadra','Descrizione_Sq'],
+    ['Tipo','JobType'],['Centrale','Centrale'],['Desc. Centrale','Desc_Centrale'],
+    ['Località','Localita'],['Indirizzo','Indirizzo'],
+    ['Operatore','Operatore'],['Recapito','Recapito'],
+    ['Assistente','Assistente'],['Pali','Pali'],
+    ['Note','Note'],['Lat','Latitudine'],['Lon','Longitudine'],
+  ];
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:'var(--panel)', border:'1px solid var(--border)', borderRadius:14, width:'85vw', maxWidth:900, maxHeight:'85vh', overflow:'hidden', display:'flex', flexDirection:'column' }}>
+        {/* Header */}
+        <div style={{ padding:'14px 20px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:12 }}>
+          <span style={{ fontSize:16 }}>⚖</span>
+          <div style={{ fontSize:9, fontFamily:'var(--mono)', letterSpacing:3, color:'var(--muted)' }}>CONFRONTO WR</div>
+          <div style={{ marginLeft:'auto', display:'flex', gap:16, alignItems:'center' }}>
+            <span style={{ fontFamily:'var(--mono)', fontSize:13, color:'var(--accent)', fontWeight:700 }}>WR {wrA.WR}</span>
+            <span style={{ color:'var(--muted)' }}>vs</span>
+            <span style={{ fontFamily:'var(--mono)', fontSize:13, color:'#f59e0b', fontWeight:700 }}>WR {wrB.WR}</span>
+            <button onClick={onClose} style={{ background:'transparent', border:'none', color:'var(--muted)', fontSize:20, cursor:'pointer', marginLeft:8 }}>×</button>
+          </div>
+        </div>
+
+        {/* Tabella confronto */}
+        <div style={{ overflow:'auto', flex:1 }}>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+            <thead style={{ position:'sticky', top:0, zIndex:5 }}>
+              <tr style={{ background:'#1a1f2e' }}>
+                <th style={{ padding:'8px 14px', textAlign:'left', fontSize:10, color:'var(--muted)', fontWeight:500, borderBottom:'1px solid var(--border)', width:120 }}>Campo</th>
+                <th style={{ padding:'8px 14px', textAlign:'left', fontSize:10, color:'var(--accent)', fontWeight:500, borderBottom:'1px solid var(--border)' }}>WR {wrA.WR}</th>
+                <th style={{ padding:'8px 14px', textAlign:'left', fontSize:10, color:'#f59e0b', fontWeight:500, borderBottom:'1px solid var(--border)' }}>WR {wrB.WR}</th>
+                <th style={{ padding:'8px 14px', textAlign:'center', fontSize:10, color:'var(--muted)', fontWeight:500, borderBottom:'1px solid var(--border)', width:60 }}>Uguale</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CAMPI.map(([label, key], i) => {
+                const valA = (wrA[key] || '').trim();
+                const valB = (wrB[key] || '').trim();
+                const uguale = valA === valB;
+                const entrambiVuoti = !valA && !valB;
+                if (entrambiVuoti) return null;
+                return (
+                  <tr key={key} style={{ borderBottom:'1px solid var(--border)', background: uguale ? 'rgba(34,197,94,0.04)' : 'rgba(239,68,68,0.04)' }}>
+                    <td style={{ padding:'7px 14px', color:'var(--muted)', fontSize:11, whiteSpace:'nowrap' }}>{label}</td>
+                    <td style={{ padding:'7px 14px', color: uguale ? 'var(--text)' : 'var(--accent)', fontWeight: uguale ? 400 : 500, maxWidth:280, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{valA || '—'}</td>
+                    <td style={{ padding:'7px 14px', color: uguale ? 'var(--text)' : '#f59e0b', fontWeight: uguale ? 400 : 500, maxWidth:280, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{valB || '—'}</td>
+                    <td style={{ padding:'7px 14px', textAlign:'center' }}>
+                      {uguale ? <span style={{ color:'#22c55e', fontSize:14 }}>✓</span> : <span style={{ color:'#ef4444', fontSize:14 }}>✗</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer stats */}
+        <div style={{ padding:'10px 20px', borderTop:'1px solid var(--border)', display:'flex', gap:16, fontSize:12 }}>
+          <span style={{ color:'#22c55e' }}>✓ {CAMPI.filter(([,k]) => (wrA[k]||'').trim() === (wrB[k]||'').trim() && ((wrA[k]||'') || (wrB[k]||''))).length} campi uguali</span>
+          <span style={{ color:'#ef4444' }}>✗ {CAMPI.filter(([,k]) => (wrA[k]||'').trim() !== (wrB[k]||'').trim()).length} campi diversi</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SollecitaPraticaPopup({ wr, API, onClose, onSollecitato }) {
   const [messaggio, setMessaggio] = React.useState('');
   const [saving, setSaving] = React.useState(false);
@@ -120,6 +191,7 @@ export default function Pratiche() {
   const [loading, setLoading] = useState(true);
   const [solleciti, setSolleciti] = useState([]);
   const [sollecitaWR, setSollecitaWR] = useState(null);
+  const [showConfronta, setShowConfronta] = useState(false);
   const [search, setSearch] = useState('');
   const [filtroSq, setFiltroSq] = useState('');
   const [filtroStato, setFiltroStato] = useState('');
@@ -202,6 +274,7 @@ export default function Pratiche() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 48px)', overflow: 'hidden' }}>
       {selected && <PopupWR w={selected} onClose={() => setSelected(null)} />}
+      {showConfronta && checkedRows.size === 2 && (() => { const [a,b] = [...checkedRows]; const wrA = wr.find(w=>String(w.WR)===a); const wrB = wr.find(w=>String(w.WR)===b); return wrA && wrB ? <ConfrontaWR wrA={wrA} wrB={wrB} onClose={() => setShowConfronta(false)} /> : null; })()}
       {sollecitaWR && <SollecitaPraticaPopup wr={sollecitaWR} API={API} onClose={() => setSollecitaWR(null)} onSollecitato={wrNum => setSolleciti(prev => [...prev.filter(s => s.wr !== wrNum), { wr: wrNum, sub_code: sollecitaWR.Sq }])} />}
 
       {/* Toolbar */}

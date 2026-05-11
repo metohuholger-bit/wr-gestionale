@@ -344,6 +344,70 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
 }
 
 
+
+// ── CONFRONTA WR ──
+function ConfrontaWR({ wrA, wrB, onClose }) {
+  const CAMPI = [
+    ['WR','WR'],['Stato','StatoWR'],['Data','Datadispaccio'],
+    ['Squadra','Sq'],['Desc. Squadra','Descrizione_Sq'],
+    ['Tipo','JobType'],['Centrale','Centrale'],['Desc. Centrale','Desc_Centrale'],
+    ['Località','Localita'],['Indirizzo','Indirizzo'],
+    ['Operatore','Operatore'],['Recapito','Recapito'],
+    ['Assistente','Assistente'],['Pali','Pali'],
+    ['Note','Note'],['Lat','Latitudine'],['Lon','Longitudine'],
+  ];
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:'var(--panel)', border:'1px solid var(--border)', borderRadius:14, width:'85vw', maxWidth:900, maxHeight:'85vh', overflow:'hidden', display:'flex', flexDirection:'column' }}>
+        <div style={{ padding:'14px 20px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:12 }}>
+          <span style={{ fontSize:16 }}>⚖</span>
+          <div style={{ fontSize:9, fontFamily:'var(--mono)', letterSpacing:3, color:'var(--muted)' }}>CONFRONTO WR</div>
+          <div style={{ marginLeft:'auto', display:'flex', gap:16, alignItems:'center' }}>
+            <span style={{ fontFamily:'var(--mono)', fontSize:13, color:'var(--accent)', fontWeight:700 }}>WR {wrA.WR}</span>
+            <span style={{ color:'var(--muted)' }}>vs</span>
+            <span style={{ fontFamily:'var(--mono)', fontSize:13, color:'#f59e0b', fontWeight:700 }}>WR {wrB.WR}</span>
+            <button onClick={onClose} style={{ background:'transparent', border:'none', color:'var(--muted)', fontSize:20, cursor:'pointer', marginLeft:8 }}>×</button>
+          </div>
+        </div>
+        <div style={{ overflow:'auto', flex:1 }}>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+            <thead style={{ position:'sticky', top:0, zIndex:5 }}>
+              <tr style={{ background:'#1a1f2e' }}>
+                <th style={{ padding:'8px 14px', textAlign:'left', fontSize:10, color:'var(--muted)', fontWeight:500, borderBottom:'1px solid var(--border)', width:120 }}>Campo</th>
+                <th style={{ padding:'8px 14px', textAlign:'left', fontSize:10, color:'var(--accent)', fontWeight:500, borderBottom:'1px solid var(--border)' }}>WR {wrA.WR}</th>
+                <th style={{ padding:'8px 14px', textAlign:'left', fontSize:10, color:'#f59e0b', fontWeight:500, borderBottom:'1px solid var(--border)' }}>WR {wrB.WR}</th>
+                <th style={{ padding:'8px 14px', textAlign:'center', fontSize:10, color:'var(--muted)', fontWeight:500, borderBottom:'1px solid var(--border)', width:60 }}>Uguale</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CAMPI.map(([label, key]) => {
+                const valA = (wrA[key] || '').trim();
+                const valB = (wrB[key] || '').trim();
+                const uguale = valA === valB;
+                if (!valA && !valB) return null;
+                return (
+                  <tr key={key} style={{ borderBottom:'1px solid var(--border)', background: uguale ? 'rgba(34,197,94,0.04)' : 'rgba(239,68,68,0.04)' }}>
+                    <td style={{ padding:'7px 14px', color:'var(--muted)', fontSize:11, whiteSpace:'nowrap' }}>{label}</td>
+                    <td style={{ padding:'7px 14px', color: uguale ? 'var(--text)' : 'var(--accent)', fontWeight: uguale ? 400 : 500, maxWidth:280, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{valA || '—'}</td>
+                    <td style={{ padding:'7px 14px', color: uguale ? 'var(--text)' : '#f59e0b', fontWeight: uguale ? 400 : 500, maxWidth:280, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{valB || '—'}</td>
+                    <td style={{ padding:'7px 14px', textAlign:'center' }}>
+                      {uguale ? <span style={{ color:'#22c55e' }}>✓</span> : <span style={{ color:'#ef4444' }}>✗</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ padding:'10px 20px', borderTop:'1px solid var(--border)', display:'flex', gap:16, fontSize:12 }}>
+          <span style={{ color:'#22c55e' }}>✓ {CAMPI.filter(([,k]) => (wrA[k]||'').trim() === (wrB[k]||'').trim() && ((wrA[k]||'')||(wrB[k]||''))).length} uguali</span>
+          <span style={{ color:'#ef4444' }}>✗ {CAMPI.filter(([,k]) => (wrA[k]||'').trim() !== (wrB[k]||'').trim()).length} diversi</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── POPUP SOLLECITI ──
 function SollicitiPopup({ solleciti, wr, onClose, onSelectWR }) {
   const [search, setSearch] = React.useState('');
@@ -414,6 +478,7 @@ export default function SubDashboard({ previewMode }) {
   const [selectedWR, setSelectedWR] = useState(null);
   const [solleciti, setSolleciti] = useState([]);
   const [showSolleciti, setShowSolleciti] = useState(false);
+  const [showConfronta, setShowConfronta] = useState(false);
   const [search, setSearch] = useState('');
   const [filtroStato, setFiltroStato] = useState('');
   const [filtroCentrale, setFiltroCentrale] = useState('');
@@ -560,6 +625,7 @@ export default function SubDashboard({ previewMode }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
+      {showConfronta && selectedRows.size === 2 && (() => { const [a,b] = [...selectedRows]; const wrA = wr.find(w=>String(w.WR)===a); const wrB = wr.find(w=>String(w.WR)===b); return wrA && wrB ? <ConfrontaWR wrA={wrA} wrB={wrB} onClose={() => setShowConfronta(false)} /> : null; })()}
       {showSolleciti && <SollicitiPopup solleciti={solleciti} wr={wr} onClose={() => setShowSolleciti(false)} onSelectWR={w => { setSelectedWR(w); setActiveTab('pratiche'); }} />}
       {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} subCode={subCode} miniSquadre={miniSquadre} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} solleciti={solleciti} />}
       {selectedWR && <PopupWR w={selectedWR} onClose={() => setSelectedWR(null)} />}
@@ -643,6 +709,12 @@ export default function SubDashboard({ previewMode }) {
                 ⚠ +90gg
               </button>
               <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:10 }}>
+                {selectedRows.size === 2 && (
+                  <button onClick={() => setShowConfronta(true)}
+                    style={{ background:'rgba(245,158,11,0.15)', border:'1px solid rgba(245,158,11,0.3)', color:'var(--accent2)', padding:'5px 10px', borderRadius:6, fontSize:12, cursor:'pointer', fontWeight:600 }}>
+                    ⚖ Confronta
+                  </button>
+                )}
                 <button onClick={() => setShowSolleciti(true)}
                   title="Apri solleciti"
                   style={{ background: solleciti.length > 0 ? 'rgba(236,72,153,0.1)' : 'transparent', border:`1px solid ${solleciti.length > 0 ? 'rgba(236,72,153,0.3)' : 'var(--border)'}`, color: solleciti.length > 0 ? '#ec4899' : 'var(--muted)', padding:'5px 10px', borderRadius:6, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>

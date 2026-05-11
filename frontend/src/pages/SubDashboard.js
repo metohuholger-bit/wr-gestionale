@@ -402,6 +402,7 @@ export default function SubDashboard({ previewMode }) {
   const [filtroCentrale, setFiltroCentrale] = useState('');
   const [filtroComune, setFiltroComune] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
+  const [filtroCard, setFiltroCard] = useState(null); // null | 'over90' | 'avvicin' | 'urgenti'
   const [colFilter, setColFilter] = useState({ WR:'', StatoWR:'', Centrale:'', Desc_Centrale:'', Indirizzo:'', Localita:'', Pali:'', JobType:'', Assistente:'' });
   const setCol = (col, val) => setColFilter(prev => ({ ...prev, [col]: val }));
   const [selectedRows, setSelectedRows] = useState(new Set());
@@ -472,6 +473,9 @@ export default function SubDashboard({ previewMode }) {
   const tipi = [...new Set(wr.map(w => w.JobType).filter(Boolean))].sort();
 
   const filtered = wr.filter(w => {
+    if (filtroCard === 'over90' && (daysDiff(w.Datadispaccio)||0) <= 90) return false;
+    if (filtroCard === 'avvicin') { const d = daysDiff(w.Datadispaccio); if (d === null || d <= 60 || d > 90) return false; }
+    if (filtroCard === 'urgenti' && !(w.Note||'').match(/670050|670100/)) return false;
     if (filtroStato && w.StatoWR !== filtroStato) return false;
     if (filtro90 && !isOld(w.Datadispaccio)) return false;
     if (filtroCentrale && !w.Centrale?.toLowerCase().includes(filtroCentrale.toLowerCase())) return false;
@@ -532,6 +536,8 @@ export default function SubDashboard({ previewMode }) {
   };
 
   const selectStyle = { background: 'var(--panel)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 6, fontSize: 12, outline: 'none' };
+  const resetFiltroCard = () => setFiltroCard(null);
+
   const tabStyle = (tab) => ({ padding: '8px 16px', fontSize: 13, cursor: 'pointer', border: 'none', background: activeTab === tab ? 'rgba(59,130,246,0.15)' : 'transparent', color: activeTab === tab ? 'var(--accent)' : 'var(--muted)', borderBottom: activeTab === tab ? '2px solid var(--accent)' : '2px solid transparent', marginBottom: -1 });
 
   return (
@@ -570,14 +576,15 @@ export default function SubDashboard({ previewMode }) {
         {/* Card statistiche */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
           {[
-            { label: 'WR TOTALI', val: wr.length, color: '#3b82f6', bg:'rgba(59,130,246,0.08)', border:'rgba(59,130,246,0.2)' },
-            { label: 'OLTRE 90GG', val: oltre90, color: oltre90 > 0 ? '#ef4444' : '#475569', bg: oltre90 > 0 ? 'rgba(239,68,68,0.08)' : 'rgba(100,116,139,0.05)', border: oltre90 > 0 ? 'rgba(239,68,68,0.2)' : 'rgba(100,116,139,0.1)' },
-            { label: '60-90GG', val: (() => { const a = wr.filter(w => { const d = daysDiff(w.Datadispaccio); return d !== null && d > 60 && d <= 90; }).length; return a; })(), color: '#f59e0b', bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.2)' },
-            { label: 'URGENTI', val: wr.filter(w => (w.Note||'').match(/670050|670100/)).length, color: '#ec4899', bg:'rgba(236,72,153,0.08)', border:'rgba(236,72,153,0.2)' },
-            { label: 'MINI-SQUADRE', val: miniSquadre.length, color: '#f59e0b', bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.2)' },
+            { label: 'WR TOTALI', val: wr.length, color: '#3b82f6', bg:'rgba(59,130,246,0.08)', border:'rgba(59,130,246,0.2)', key: null },
+            { label: 'OLTRE 90GG', val: oltre90, color: oltre90 > 0 ? '#ef4444' : '#475569', bg: oltre90 > 0 ? 'rgba(239,68,68,0.08)' : 'rgba(100,116,139,0.05)', border: oltre90 > 0 ? 'rgba(239,68,68,0.2)' : 'rgba(100,116,139,0.1)', key: 'over90' },
+            { label: '60-90GG', val: wr.filter(w => { const d = daysDiff(w.Datadispaccio); return d !== null && d > 60 && d <= 90; }).length, color: '#f59e0b', bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.2)', key: 'avvicin' },
+            { label: 'URGENTI', val: wr.filter(w => (w.Note||'').match(/670050|670100/)).length, color: '#ec4899', bg:'rgba(236,72,153,0.08)', border:'rgba(236,72,153,0.2)', key: 'urgenti' },
+            { label: 'MINI-SQUADRE', val: miniSquadre.length, color: '#f59e0b', bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.2)', key: null },
           ].map((s, i) => (
-            <div key={i} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 8, padding: '10px 14px', flex: 1 }}>
-              <div style={{ fontSize: 9, fontFamily:'monospace', letterSpacing:2, color: s.color, marginBottom: 6, fontWeight:600 }}>{s.label}</div>
+            <div key={i} onClick={() => { if(s.key) { setFiltroCard(filtroCard === s.key ? null : s.key); setActiveTab('pratiche'); setPage(1); } }}
+              style={{ background: s.bg, border: `2px solid ${filtroCard === s.key ? s.color : s.border}`, borderRadius: 8, padding: '10px 14px', flex: 1, cursor: s.key ? 'pointer' : 'default', transition:'border 0.2s' }}>
+              <div style={{ fontSize: 9, fontFamily:'monospace', letterSpacing:2, color: s.color, marginBottom: 6, fontWeight:600 }}>{s.label}{filtroCard === s.key ? ' ✓' : ''}</div>
               <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.val}</div>
             </div>
           ))}

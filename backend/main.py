@@ -133,34 +133,27 @@ async def get_sheet_data():
         r = await c.get(SHEET_CSV_URL, follow_redirects=True)
     import re
 
-    # Colonne attese nell'ordine del Sheet
-    COLS = ["Area","KeyLavor","COIntervento","Assistente","JobType","WR","Network",
-            "Telefonico_BI","StatoWR","Discriminante","Sq","Descrizione_Sq","Dipendente",
-            "Attivita","Centrale","Desc_Centrale","Localita","Indirizzo","Operatore",
-            "Recapito","Datadispaccio","Pali","Note","Latitudine","Longitudine","RiepilogoPrev"]
-
+    import csv, io
+    # Usa DictReader con supporto per campi quotati
+    reader = csv.DictReader(io.StringIO(r.text), quoting=csv.QUOTE_MINIMAL)
     rows = []
-    lines = r.text.split("\n")
-    # Salta header
-    for line in lines[1:]:
-        if not line.strip():
+    for row in reader:
+        if not row:
             continue
-        parts = line.split("\t")
-        if len(parts) < 6:
-            continue
-        row = {}
-        for i, col in enumerate(COLS):
-            row[col] = parts[i].strip() if i < len(parts) else ""
-        # Verifica che WR sia un numero
-        wr_val = row.get("WR", "").strip()
+        wr_val = str(row.get("WR", "") or "").strip()
         if not wr_val or not wr_val.isdigit():
             continue
+        clean = {}
+        for k, v in row.items():
+            if k is None:
+                continue
+            clean[k.strip()] = (v or "").strip()
         # Converti coordinate con virgola decimale in punto
         for col in ["Latitudine", "Longitudine"]:
-            val = row.get(col, "")
+            val = clean.get(col, "")
             if val and re.match(r'^\d+,\d+$', val):
-                row[col] = val.replace(",", ".")
-        rows.append(row)
+                clean[col] = val.replace(",", ".")
+        rows.append(clean)
     _sheet_cache = {"data": rows, "ts": time.time()}
     return rows
 
@@ -176,7 +169,7 @@ async def get_wr(user=Depends(get_current_user)):
     elif user["role"] == "squad":
         sq = await db.mini_squadre.find_one({"link_token": user.get("squad_token")})
         if sq:
-            rows = [r for r in rows if r.get("WR") in sq.get("wr_list", [])]
+            rows = [r for r in rows if str(r.get("WR","")).strip() in [str(x).strip() for x in sq.get("wr_list", [])]]
         else:
             rows = []
 
@@ -293,7 +286,7 @@ async def public_view(token: str):
     for line in lines[1:]:
         vals = line.split(",")
         row = {headers[i]: vals[i].strip() if i < len(vals) else "" for i in range(len(headers))}
-        if row.get("WR") in sq.get("wr_list", []):
+        if str(row.get("WR", "")).strip() in [str(x).strip() for x in sq.get("wr_list", [])]:
             rows.append(row)
     return {"squadra": sq["nome"], "sub_code": sq["sub_code"], "wr": rows}
 

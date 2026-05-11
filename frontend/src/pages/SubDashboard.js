@@ -415,11 +415,17 @@ export default function SubDashboard({ previewMode }) {
 
   useEffect(() => {
     if (previewMode) {
-      // In preview mode carica mini-squadre filtrate per sub_code
-      axios.get(`${API}/mini-squadre?sub_code=${previewMode.subCode}`)
-        .then(r => setMiniSquadre(r.data))
-        .catch(() => {})
-        .finally(() => setLoading(false));
+      setLoading(true);
+      Promise.all([
+        axios.get(`${API}/mini-squadre?sub_code=${previewMode.subCode}`),
+        axios.get(`${API}/solleciti`)
+      ]).then(([sqR, solR]) => {
+        setMiniSquadre(sqR.data);
+        const filtered = solR.data.filter(s => String(s.sub_code).trim() === String(previewMode.subCode).trim());
+        console.log('Solleciti totali:', solR.data.length, 'filtrati per', previewMode.subCode, ':', filtered.length);
+        setSolleciti(filtered);
+      }).catch(e => console.error('Errore caricamento preview:', e))
+      .finally(() => setLoading(false));
       return;
     }
     Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/mini-squadre`), axios.get(`${API}/solleciti`)])
@@ -428,7 +434,7 @@ export default function SubDashboard({ previewMode }) {
         setMiniSquadre(sqR.data);
         setSolleciti(solR.data);
       }).catch(() => {}).finally(() => setLoading(false));
-  }, [API, previewMode]);
+  }, [API, previewMode?.subCode]);
 
   // Ricarica solleciti ogni 2 minuti
   useEffect(() => {

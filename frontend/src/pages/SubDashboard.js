@@ -526,7 +526,7 @@ export default function SubDashboard({ previewMode }) {
                       <th style={{ padding: '9px 8px', width: 32 }}>
                         <input type="checkbox" onChange={e => { if (e.target.checked) setSelectedRows(new Set(paginated.map(w => String(w.WR)))); else setSelectedRows(new Set()); }} />
                       </th>
-                      {['WR','Stato','Data','Indirizzo','Località','Pali','Tipo','Assistente'].map(h => (
+                      {['WR','Stato','Data','Centrale','Desc. Centrale','Indirizzo','Località','Pali','Tipo','Assistente'].map(h => (
                         <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontSize: 11, color: 'var(--muted)', fontWeight: 500, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -546,6 +546,8 @@ export default function SubDashboard({ previewMode }) {
                           <td style={{ padding: '7px 12px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)' }} onClick={() => setSelectedWR(w)}>{w.WR}</td>
                           <td style={{ padding: '7px 12px', color: old ? 'var(--red)' : 'var(--green)', fontSize: 11 }} onClick={() => setSelectedWR(w)}>{w.StatoWR}</td>
                           <td style={{ padding: '7px 12px', color: 'var(--muted)', whiteSpace: 'nowrap' }} onClick={() => setSelectedWR(w)}>{w.Datadispaccio}</td>
+                          <td style={{ padding: '7px 12px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }} onClick={() => setSelectedWR(w)}>{w.Centrale || '—'}</td>
+                          <td style={{ padding: '7px 12px', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--muted)' }} onClick={() => setSelectedWR(w)}>{w.Desc_Centrale || '—'}</td>
                           <td style={{ padding: '7px 12px', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} onClick={() => setSelectedWR(w)}>{w.Indirizzo}</td>
                           <td style={{ padding: '7px 12px', color: 'var(--muted)', whiteSpace: 'nowrap' }} onClick={() => setSelectedWR(w)}>{w.Localita}</td>
                           <td style={{ padding: '7px 12px', color: 'var(--muted)' }} onClick={() => setSelectedWR(w)}>{w.Pali || '—'}</td>

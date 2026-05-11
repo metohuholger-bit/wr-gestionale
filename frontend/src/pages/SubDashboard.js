@@ -574,7 +574,9 @@ export default function SubDashboard({ previewMode }) {
   const [filtroCentrale, setFiltroCentrale] = useState('');
   const [filtroComune, setFiltroComune] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
-  const [filtroCard, setFiltroCard] = useState(null); // null | 'over90' | 'avvicin' | 'urgenti'
+  const [filtroCard, setFiltroCard] = useState(null);
+  const [multiWR, setMultiWR] = useState('');
+  const [showMultiWR, setShowMultiWR] = useState(false); // null | 'over90' | 'avvicin' | 'urgenti'
   const [colFilter, setColFilter] = useState({ WR:'', StatoWR:'', Centrale:'', Desc_Centrale:'', Discriminante:'', Indirizzo:'', Localita:'', Pali:'', JobType:'', Assistente:'' });
   const [filtroDiscriminanteMappa, setFiltroDiscriminanteMappa] = useState('');
   const setCol = (col, val) => setColFilter(prev => ({ ...prev, [col]: val }));
@@ -647,6 +649,10 @@ export default function SubDashboard({ previewMode }) {
 
   const filtered = wr.filter(w => {
     if (filtroCard === 'sollecitati' && !solleciti.some(s => String(s.wr) === String(w.WR))) return false;
+    if (multiWR.trim()) {
+      const lista = multiWR.split(/[\n,;\s]+/).map(s => s.trim()).filter(Boolean);
+      if (lista.length > 0 && !lista.includes(String(w.WR).trim())) return false;
+    }
     if (filtroCard === 'over90' && (daysDiff(w.Datadispaccio)||0) <= 90) return false;
     if (filtroCard === 'avvicin') { const d = daysDiff(w.Datadispaccio); if (d === null || d <= 60 || d > 90) return false; }
     if (filtroCard === 'urgenti' && !(w.Note||'').match(/670050|670100/)) return false;
@@ -782,7 +788,28 @@ export default function SubDashboard({ previewMode }) {
         {activeTab === 'pratiche' ? (
           <>
             <div style={{ padding: '10px 20px', background: 'var(--panel)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
-              <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Cerca tutto..." style={{ ...selectStyle, width: 180 }} />
+              <div style={{ position:'relative', display:'flex', gap:4 }}>
+                <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Cerca tutto..." style={{ ...selectStyle, width: 150 }} />
+                <button onClick={() => setShowMultiWR(!showMultiWR)} title="Ricerca multipla WR"
+                  style={{ background: multiWR.trim() ? 'rgba(59,130,246,0.2)' : 'var(--bg)', border:`1px solid ${multiWR.trim() ? 'var(--accent)' : 'var(--border)'}`, color: multiWR.trim() ? 'var(--accent)' : 'var(--muted)', padding:'4px 7px', borderRadius:5, fontSize:11, cursor:'pointer', whiteSpace:'nowrap' }}>
+                  ☰{multiWR.trim() ? ` ${multiWR.split(/[\n,;\s]+/).filter(s=>s.trim()).length}` : ''}
+                </button>
+                {showMultiWR && (
+                  <div style={{ position:'absolute', top:'100%', left:0, zIndex:100, background:'var(--panel)', border:'1px solid var(--border)', borderRadius:8, padding:10, marginTop:4, width:200, boxShadow:'0 4px 20px rgba(0,0,0,0.4)' }}>
+                    <div style={{ fontSize:9, color:'var(--muted)', marginBottom:5, fontFamily:'var(--mono)', letterSpacing:2 }}>LISTA WR</div>
+                    <textarea value={multiWR} onChange={e => { setMultiWR(e.target.value); setPage(1); }}
+                      placeholder={"Incolla WR\nuno per riga"}
+                      rows={5}
+                      style={{ width:'100%', background:'var(--bg)', border:'1px solid var(--border)', color:'var(--text)', padding:'5px 7px', borderRadius:4, fontSize:11, outline:'none', resize:'vertical', boxSizing:'border-box', fontFamily:'var(--mono)' }} />
+                    {multiWR.trim() && (
+                      <button onClick={() => { setMultiWR(''); setPage(1); }}
+                        style={{ marginTop:5, background:'transparent', border:'1px solid var(--border)', color:'var(--red)', padding:'3px 8px', borderRadius:4, fontSize:10, cursor:'pointer', width:'100%' }}>
+                        ✕ Cancella
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
               <select value={filtroStato} onChange={e => { setFiltroStato(e.target.value); setPage(1); }} style={selectStyle}>
                 <option value="">Tutti gli stati</option>
                 {stati.map(s => <option key={s} value={s}>{s}</option>)}

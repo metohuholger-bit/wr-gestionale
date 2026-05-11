@@ -90,9 +90,28 @@ function ConfrontaWR({ wrA, wrB, onClose }) {
 
 
 // ── STORICO SOLLECITI POPUP ──
-function StoricoSolleciti({ wr, solleciti, onClose }) {
+function StoricoSolleciti({ wr, solleciti, setSolleciti, API, onClose }) {
   const doc = solleciti.find(s => String(s.wr) === String(wr.WR));
   const storico = doc?.storico || [];
+
+  const eliminaTutto = async () => {
+    if (!window.confirm('Eliminare tutti i solleciti per questa WR?')) return;
+    try {
+      await axios.delete(`${API}/solleciti/${wr.WR}`);
+      setSolleciti(prev => prev.filter(s => String(s.wr) !== String(wr.WR)));
+      onClose();
+    } catch(e) { console.error(e); }
+  };
+
+  const eliminaSingolo = async (idx) => {
+    try {
+      // Rimuove elemento idx dallo storico
+      const nuovoStorico = storico.filter((_, i) => i !== idx);
+      await axios.post(`${API}/solleciti/${wr.WR}/storico`, nuovoStorico);
+      setSolleciti(prev => prev.map(s => String(s.wr) === String(wr.WR) ? { ...s, storico: nuovoStorico } : s));
+      if (nuovoStorico.length === 0) onClose();
+    } catch(e) { console.error(e); }
+  };
 
   return (
     <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -103,18 +122,21 @@ function StoricoSolleciti({ wr, solleciti, onClose }) {
             <div style={{ fontSize:9, fontFamily:'var(--mono)', letterSpacing:3, color:'var(--muted)' }}>STORICO SOLLECITI</div>
             <div style={{ fontSize:14, fontWeight:700, color:'#ec4899' }}>WR {wr.WR} — {storico.length} sollecit{storico.length === 1 ? 'o' : 'i'}</div>
           </div>
-          <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', color:'var(--muted)', fontSize:20, cursor:'pointer' }}>×</button>
+          <button onClick={eliminaTutto} title="Elimina tutti" style={{ marginLeft:'auto', background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.2)', color:'var(--red)', padding:'4px 10px', borderRadius:5, fontSize:11, cursor:'pointer' }}>🗑 Elimina tutti</button>
+          <button onClick={onClose} style={{ background:'transparent', border:'none', color:'var(--muted)', fontSize:20, cursor:'pointer' }}>×</button>
         </div>
         <div style={{ overflow:'auto', flex:1, padding:'8px 0' }}>
           {storico.length === 0 ? (
             <div style={{ padding:20, textAlign:'center', color:'var(--muted)', fontSize:13 }}>Nessun sollecito</div>
-          ) : [...storico].reverse().map((s, i) => (
+          ) : [...storico].map((s, i) => (
             <div key={i} style={{ padding:'12px 18px', borderBottom:'1px solid var(--border)' }}>
               <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}>
                 <span style={{ fontSize:11, color:'var(--muted)' }}>{s.da}</span>
                 <span style={{ fontSize:10, color:'var(--muted)', marginLeft:'auto' }}>
                   {s.data ? new Date(s.data).toLocaleString('it-IT') : ''}
                 </span>
+                <button onClick={() => eliminaSingolo(i)} title="Elimina questo sollecito"
+                  style={{ background:'transparent', border:'none', color:'var(--red)', fontSize:14, cursor:'pointer', padding:'0 2px' }}>×</button>
               </div>
               {s.messaggio ? (
                 <div style={{ background:'rgba(236,72,153,0.08)', border:'1px solid rgba(236,72,153,0.15)', borderRadius:6, padding:'8px 12px', fontSize:13, color:'#ec4899', fontStyle:'italic' }}>
@@ -326,7 +348,7 @@ export default function Pratiche() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 48px)', overflow: 'hidden' }}>
       {selected && <PopupWR w={selected} onClose={() => setSelected(null)} />}
-      {storicoWR && <StoricoSolleciti wr={storicoWR} solleciti={solleciti} onClose={() => setStoricoWR(null)} />}
+      {storicoWR && <StoricoSolleciti wr={storicoWR} solleciti={solleciti} setSolleciti={setSolleciti} API={API} onClose={() => setStoricoWR(null)} />}
       {showConfronta && checkedRows.size === 2 && (() => { const [a,b] = [...checkedRows]; const wrA = wr.find(w=>String(w.WR)===a); const wrB = wr.find(w=>String(w.WR)===b); return wrA && wrB ? <ConfrontaWR wrA={wrA} wrB={wrB} onClose={() => setShowConfronta(false)} /> : null; })()}
       {sollecitaWR && <SollecitaPraticaPopup wr={sollecitaWR} API={API} onClose={() => setSollecitaWR(null)} onSollecitato={wrNum => setSolleciti(prev => [...prev.filter(s => s.wr !== wrNum), { wr: wrNum, sub_code: sollecitaWR.Sq }])} />}
 

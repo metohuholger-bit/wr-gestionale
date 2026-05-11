@@ -308,6 +308,16 @@ async def elimina_sollecito(wr: str, user=Depends(get_current_user)):
     await db.solleciti.delete_one({"wr": wr})
     return {"ok": True}
 
+@app.post("/solleciti/{wr}/storico")
+async def aggiorna_storico(wr: str, storico: list, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    if not storico:
+        await db.solleciti.delete_one({"wr": wr})
+    else:
+        await db.solleciti.update_one({"wr": wr}, {"$set": {"storico": storico}})
+    return {"ok": True}
+
 @app.post("/admin/migra-solleciti")
 async def migra_solleciti(user=Depends(get_current_user)):
     if user["role"] != "admin":

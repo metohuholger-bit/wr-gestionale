@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Routes, Route } from 'react-router-dom';
-import Layout from '../components/Layout';
+import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import Pratiche from './Pratiche';
@@ -8,63 +7,314 @@ import SubSquadre from './SubSquadre';
 import SubDashboard from './SubDashboard';
 import Utenti from './Utenti';
 
-function VistaSub() {
-  const { API, user } = useAuth();
+const NAV = [
+  { title: 'PRINCIPALE', items: [
+    { to: '/admin', label: 'Dashboard', icon: '◈' },
+    { to: '/admin/pratiche', label: 'Pratiche', icon: '≡' },
+    { to: '/admin/vista-sub', label: 'Vista Sub', icon: '◉' },
+  ]},
+  { title: 'GESTIONE', items: [
+    { to: '/admin/sub', label: 'Sub e squadre', icon: '⬡' },
+    { to: '/admin/utenti', label: 'Utenti', icon: '⊙' },
+  ]}
+];
+
+// ── ANIMATED COUNTER ──
+function Counter({ value, color }) {
+  const [display, setDisplay] = useState(0);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (value === 0) return;
+    let start = 0;
+    const duration = 800;
+    const step = (timestamp) => {
+      if (!ref.current) return;
+      const progress = Math.min((timestamp - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.floor(eased * value));
+      if (progress < 1) requestAnimationFrame(step);
+      else setDisplay(value);
+    };
+    requestAnimationFrame((ts) => { start = ts; requestAnimationFrame(step); });
+  }, [value]);
+  return <span style={{ color }} ref={ref}>{display}</span>;
+}
+
+// ── MINI BAR CHART ──
+function BarChart({ data, maxVal }) {
+  return (
+    <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', height: 60, marginTop: 8 }}>
+      {data.slice(0, 12).map((d, i) => (
+        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+          <div style={{
+            width: '100%', background: d.color || '#3b82f6',
+            height: `${maxVal > 0 ? (d.value / maxVal) * 52 : 0}px`,
+            borderRadius: '2px 2px 0 0',
+            transition: 'height 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            minHeight: d.value > 0 ? 2 : 0,
+            opacity: 0.85
+          }} />
+          <div style={{ fontSize: 8, color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 28, transform: 'rotate(-30deg)', transformOrigin: 'top center' }}>{d.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── DONUT CHART ──
+function Donut({ segments, size = 80 }) {
+  const total = segments.reduce((s, d) => s + d.value, 0);
+  let offset = 0;
+  const r = 28, cx = 40, cy = 40, circ = 2 * Math.PI * r;
+  return (
+    <svg width={size} height={size} viewBox="0 0 80 80">
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#1e2330" strokeWidth="12" />
+      {segments.map((seg, i) => {
+        const pct = total > 0 ? seg.value / total : 0;
+        const dash = pct * circ;
+        const gap = circ - dash;
+        const el = (
+          <circle key={i} cx={cx} cy={cy} r={r} fill="none"
+            stroke={seg.color} strokeWidth="12"
+            strokeDasharray={`${dash} ${gap}`}
+            strokeDashoffset={-offset * circ}
+            style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dasharray 1s ease' }}
+          />
+        );
+        offset += pct;
+        return el;
+      })}
+    </svg>
+  );
+}
+
+// ── MAIN DASHBOARD ──
+function DashboardHome() {
+  const { API } = useAuth();
   const [wr, setWr] = useState([]);
-  const [selectedSq, setSelectedSq] = useState('');
-  const [loaded, setLoaded] = useState(false);
+  const [miniSquadre, setMiniSquadre] = useState([]);
+  const [selectedSub, setSelectedSub] = useState(null);
+  const [selectedPanel, setSelectedPanel] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    axios.get(`${API}/wr`).then(r => setWr(r.data)).catch(() => {});
+    Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/mini-squadre`)])
+      .then(([w, s]) => { setWr(w.data); setMiniSquadre(s.data); })
+      .catch(() => {}).finally(() => setLoading(false));
   }, [API]);
 
-  const squadre = [...new Set(wr.map(w => w.Sq).filter(Boolean))].sort();
-  const wrFiltrati = wr.filter(w => w.Sq === selectedSq && w.StatoWR?.toUpperCase() !== 'NUOVA');
+  const oggi = new Date();
+  const daysDiff = (d) => {
+    if (!d) return null;
+    let date;
+    if (d.includes('-') && d.indexOf('-') === 4) date = new Date(d);
+    else if (d.includes('/')) { const p = d.split('/'); date = new Date(p[2], p[1]-1, p[0]); }
+    else return null;
+    return (oggi - date) / (1000*60*60*24);
+  };
 
-  // Fakeuser per SubDashboard
-  const fakeUser = { ...user, role: 'sub', sub_code: selectedSq };
+  const filtered = selectedSub ? wr.filter(w => w.Sq === selectedSub) : wr;
 
-  if (loaded && selectedSq) {
-    return (
-      <div style={{ height: 'calc(100vh - 48px)', overflow: 'hidden', position: 'relative' }}>
-        <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 100, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={() => setLoaded(false)} style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
-            ← Torna
-          </button>
-          <span style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid var(--border)', color: 'var(--accent)', padding: '6px 12px', borderRadius: 6, fontSize: 12, fontFamily: 'var(--mono)' }}>
-            Anteprima: {selectedSq}
-          </span>
-        </div>
-        {/* Inietta dati nel contesto temporaneo */}
-        <SubDashboard previewMode={{ subCode: selectedSq, wrData: wrFiltrati }} />
+  const stats = {
+    totale: filtered.length,
+    over90: filtered.filter(w => (daysDiff(w.Datadispaccio) || 0) > 90).length,
+    avvicin: filtered.filter(w => { const d = daysDiff(w.Datadispaccio); return d !== null && d > 60 && d <= 90; }).length,
+    urgenti: filtered.filter(w => (w.Note || '').match(/670050|670100/)).length,
+    senzaCoord: filtered.filter(w => !parseFloat(w.Latitudine) && !parseFloat(w.Longitudine)).length,
+    assegnate: filtered.filter(w => miniSquadre.some(s => s.wr_list?.includes(String(w.WR)))).length,
+  };
+
+  // Per stato
+  const statiOrder = ['SOSPESA','IN CARICO','ACQUISITA','ASSEGNATA'];
+  const statiColors = { 'SOSPESA':'#f59e0b','IN CARICO':'#3b82f6','ACQUISITA':'#22c55e','ASSEGNATA':'#8b5cf6' };
+  const perStato = statiOrder.map(s => ({ label: s.replace(' ','_'), value: filtered.filter(w => w.StatoWR === s).length, color: statiColors[s] }));
+
+  // Per sub
+  const subMap = {};
+  wr.forEach(w => { if (!subMap[w.Sq]) subMap[w.Sq] = 0; subMap[w.Sq]++; });
+  const subList = Object.entries(subMap).sort((a,b) => b[1]-a[1]);
+
+  // Top sub per over90
+  const subOver90 = Object.entries(
+    wr.filter(w => (daysDiff(w.Datadispaccio) || 0) > 90).reduce((acc, w) => { acc[w.Sq] = (acc[w.Sq]||0)+1; return acc; }, {})
+  ).sort((a,b) => b[1]-a[1]).slice(0,5);
+
+  if (loading) return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'#475569', flexDirection:'column', gap:12 }}>
+      <div style={{ fontFamily:'monospace', fontSize:11, letterSpacing:4, color:'#3b82f6' }}>CARICAMENTO</div>
+      <div style={{ display:'flex', gap:4 }}>
+        {[0,1,2].map(i => <div key={i} style={{ width:6, height:6, borderRadius:'50%', background:'#3b82f6', animation:`pulse 1.2s ease-in-out ${i*0.2}s infinite`, opacity:0.7 }} />)}
       </div>
-    );
-  }
+    </div>
+  );
+
+  const CARDS = [
+    { key:'totale', label:'WR TOTALI', icon:'◈', color:'#3b82f6', bg:'rgba(59,130,246,0.08)', border:'rgba(59,130,246,0.2)' },
+    { key:'over90', label:'OLTRE 90GG', icon:'⚠', color:'#ef4444', bg:'rgba(239,68,68,0.08)', border:'rgba(239,68,68,0.2)' },
+    { key:'avvicin', label:'60-90GG', icon:'◔', color:'#f59e0b', bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.2)' },
+    { key:'urgenti', label:'URGENTI', icon:'⚡', color:'#ec4899', bg:'rgba(236,72,153,0.08)', border:'rgba(236,72,153,0.2)' },
+    { key:'senzaCoord', label:'SENZA COORD', icon:'◎', color:'#64748b', bg:'rgba(100,116,139,0.08)', border:'rgba(100,116,139,0.2)' },
+    { key:'assegnate', label:'ASSEGNATE', icon:'✓', color:'#22c55e', bg:'rgba(34,197,94,0.08)', border:'rgba(34,197,94,0.2)' },
+  ];
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ fontSize: 18, fontWeight: 500, marginBottom: 4 }}>Vista Sub</div>
-      <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24 }}>Scegli un sub per vedere la sua vista</div>
+    <div style={{ padding:'20px 24px', overflow:'auto', height:'calc(100vh - 48px)', background:'#0a0d14' }}>
+      <style>{`
+        @keyframes pulse { 0%,100%{transform:scale(1);opacity:0.7} 50%{transform:scale(1.3);opacity:1} }
+        @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+        .stat-card { animation: fadeUp 0.4s ease both; }
+        .stat-card:hover { transform: translateY(-2px); transition: transform 0.2s; }
+        .sub-pill:hover { opacity:1 !important; }
+        .wr-row:hover { background: rgba(59,130,246,0.06) !important; }
+      `}</style>
 
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20 }}>
-        <select value={selectedSq} onChange={e => setSelectedSq(e.target.value)}
-          style={{ background: 'var(--panel)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 12px', borderRadius: 8, fontSize: 14, outline: 'none', minWidth: 200 }}>
-          <option value="">Seleziona squadra/sub...</option>
-          {squadre.map(s => {
-            const nome = wr.find(w => w.Sq === s)?.Descrizione_Sq || '';
-            return <option key={s} value={s}>{s}{nome ? ` — ${nome}` : ''}</option>;
-          })}
-        </select>
-        <button onClick={() => selectedSq && setLoaded(true)} disabled={!selectedSq}
-          style={{ background: selectedSq ? 'rgba(59,130,246,0.2)' : 'var(--bg)', border: `1px solid ${selectedSq ? 'var(--accent)' : 'var(--border)'}`, color: selectedSq ? 'var(--accent)' : 'var(--muted)', padding: '8px 16px', borderRadius: 8, fontSize: 14, cursor: selectedSq ? 'pointer' : 'not-allowed' }}>
-          Visualizza →
-        </button>
+      {/* Header */}
+      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:24 }}>
+        <div>
+          <div style={{ fontFamily:'monospace', fontSize:10, letterSpacing:4, color:'#475569', marginBottom:6 }}>MDS IMPIANTI / GESTIONALE WR</div>
+          <div style={{ fontSize:22, fontWeight:700, color:'#f1f5f9', letterSpacing:-0.5 }}>
+            {selectedSub ? `Squadra ${selectedSub}` : 'Panoramica Generale'}
+          </div>
+          <div style={{ fontSize:12, color:'#475569', marginTop:4 }}>
+            {oggi.toLocaleDateString('it-IT', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}
+          </div>
+        </div>
+        {selectedSub && (
+          <button onClick={() => setSelectedSub(null)}
+            style={{ background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.3)', color:'#ef4444', padding:'6px 14px', borderRadius:6, fontSize:12, cursor:'pointer', fontFamily:'monospace' }}>
+            ✕ Reset
+          </button>
+        )}
       </div>
 
-      {selectedSq && (
-        <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, padding: 16 }}>
-          <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>
-            <span style={{ color: 'var(--accent)', fontFamily: 'var(--mono)', fontWeight: 600 }}>{selectedSq}</span> — {wrFiltrati.length} WR visibili (escluse NUOVA)
+      {/* Sub selector */}
+      <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:24 }}>
+        <button onClick={() => setSelectedSub(null)}
+          className="sub-pill"
+          style={{ padding:'5px 12px', borderRadius:20, border:`1px solid ${!selectedSub ? '#3b82f6' : '#252a3a'}`, background: !selectedSub ? 'rgba(59,130,246,0.15)' : 'transparent', color: !selectedSub ? '#3b82f6' : '#475569', fontSize:11, cursor:'pointer', fontFamily:'monospace', opacity: !selectedSub ? 1 : 0.7 }}>
+          TUTTI ({wr.length})
+        </button>
+        {subList.map(([cod, cnt]) => {
+          const over = wr.filter(w => w.Sq === cod && (daysDiff(w.Datadispaccio)||0) > 90).length;
+          return (
+            <button key={cod} onClick={() => setSelectedSub(selectedSub === cod ? null : cod)}
+              className="sub-pill"
+              style={{ padding:'5px 12px', borderRadius:20, border:`1px solid ${selectedSub === cod ? '#3b82f6' : '#252a3a'}`, background: selectedSub === cod ? 'rgba(59,130,246,0.15)' : 'transparent', color: selectedSub === cod ? '#3b82f6' : '#94a3b8', fontSize:11, cursor:'pointer', fontFamily:'monospace', opacity: selectedSub === cod ? 1 : 0.7, position:'relative' }}>
+              {cod} <span style={{ color:'#475569' }}>({cnt})</span>
+              {over > 0 && <span style={{ marginLeft:4, color:'#ef4444', fontSize:9 }}>⚠{over}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Stat cards */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:10, marginBottom:24 }}>
+        {CARDS.map((c, i) => (
+          <div key={c.key} className="stat-card" style={{ animationDelay:`${i*0.07}s`, background:c.bg, border:`1px solid ${c.border}`, borderRadius:10, padding:'14px 16px', cursor:'default' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+              <div style={{ fontSize:9, fontFamily:'monospace', letterSpacing:2, color:c.color, fontWeight:600 }}>{c.label}</div>
+              <div style={{ fontSize:16, color:c.color, opacity:0.6 }}>{c.icon}</div>
+            </div>
+            <div style={{ fontSize:32, fontWeight:700, lineHeight:1 }}>
+              <Counter value={stats[c.key]} color={c.color} />
+            </div>
+            {stats.totale > 0 && (
+              <div style={{ marginTop:6, fontSize:10, color:'#475569' }}>
+                {((stats[c.key]/stats.totale)*100).toFixed(1)}% del totale
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Charts row */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:24 }}>
+
+        {/* Donut stati */}
+        <div style={{ background:'#111827', border:'1px solid #1e2330', borderRadius:10, padding:16 }}>
+          <div style={{ fontFamily:'monospace', fontSize:9, letterSpacing:3, color:'#475569', marginBottom:12 }}>DISTRIBUZIONE STATI</div>
+          <div style={{ display:'flex', alignItems:'center', gap:16 }}>
+            <Donut segments={perStato} size={90} />
+            <div style={{ flex:1 }}>
+              {perStato.map(s => (
+                <div key={s.label} style={{ display:'flex', alignItems:'center', gap:6, marginBottom:5 }}>
+                  <div style={{ width:8, height:8, borderRadius:2, background:s.color, flexShrink:0 }} />
+                  <div style={{ fontSize:10, color:'#64748b', flex:1, fontFamily:'monospace' }}>{s.label}</div>
+                  <div style={{ fontSize:11, color:'#e2e8f0', fontWeight:600 }}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Bar chart sub */}
+        <div style={{ background:'#111827', border:'1px solid #1e2330', borderRadius:10, padding:16 }}>
+          <div style={{ fontFamily:'monospace', fontSize:9, letterSpacing:3, color:'#475569', marginBottom:4 }}>WR PER SQUADRA</div>
+          <BarChart
+            data={subList.slice(0,10).map(([cod, cnt]) => ({ label: cod, value: cnt, color: '#3b82f6' }))}
+            maxVal={Math.max(...subList.map(([,v]) => v), 1)}
+          />
+        </div>
+
+        {/* Top over90 */}
+        <div style={{ background:'#111827', border:'1px solid #1e2330', borderRadius:10, padding:16 }}>
+          <div style={{ fontFamily:'monospace', fontSize:9, letterSpacing:3, color:'#475569', marginBottom:12 }}>TOP ARRETRATE +90GG</div>
+          {subOver90.length === 0 ? (
+            <div style={{ color:'#22c55e', fontSize:12, marginTop:8 }}>✓ Nessuna squadra arretrata</div>
+          ) : subOver90.map(([cod, cnt], i) => {
+            const tot = subMap[cod] || 1;
+            const pct = cnt/tot;
+            return (
+              <div key={cod} style={{ marginBottom:8 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
+                  <span style={{ fontFamily:'monospace', fontSize:11, color:'#94a3b8' }}>{cod}</span>
+                  <span style={{ fontSize:11, color:'#ef4444', fontWeight:600 }}>{cnt} <span style={{ color:'#475569', fontWeight:400 }}>/ {tot}</span></span>
+                </div>
+                <div style={{ height:4, background:'#1e2330', borderRadius:2, overflow:'hidden' }}>
+                  <div style={{ height:'100%', width:`${pct*100}%`, background: pct > 0.5 ? '#ef4444' : '#f59e0b', borderRadius:2, transition:'width 1s ease' }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* WR list per sub selezionato */}
+      {selectedSub && (
+        <div style={{ background:'#111827', border:'1px solid #1e2330', borderRadius:10, overflow:'hidden' }}>
+          <div style={{ padding:'12px 16px', borderBottom:'1px solid #1e2330', fontFamily:'monospace', fontSize:9, letterSpacing:3, color:'#475569' }}>
+            WR — {selectedSub} ({filtered.length})
+          </div>
+          <div style={{ overflow:'auto', maxHeight:300 }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+              <thead>
+                <tr style={{ background:'#0a0d14' }}>
+                  {['WR','Stato','Data','Indirizzo','Pali'].map(h => (
+                    <th key={h} style={{ padding:'8px 12px', textAlign:'left', fontSize:10, color:'#475569', fontFamily:'monospace', letterSpacing:1, borderBottom:'1px solid #1e2330' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.slice(0,50).map((w, i) => {
+                  const days = daysDiff(w.Datadispaccio);
+                  const isOld = days > 90;
+                  const isWarn = days > 60 && days <= 90;
+                  return (
+                    <tr key={i} className="wr-row" style={{ borderBottom:'1px solid #0f1420' }}>
+                      <td style={{ padding:'7px 12px', fontFamily:'monospace', fontSize:11, color: isOld ? '#ef4444' : isWarn ? '#f59e0b' : '#3b82f6' }}>{w.WR}</td>
+                      <td style={{ padding:'7px 12px' }}>
+                        <span style={{ fontSize:10, padding:'2px 6px', borderRadius:3, background: isOld ? 'rgba(239,68,68,0.15)' : 'rgba(100,116,139,0.15)', color: isOld ? '#ef4444' : '#64748b' }}>
+                          {isOld ? '+90gg' : w.StatoWR}
+                        </span>
+                      </td>
+                      <td style={{ padding:'7px 12px', color:'#475569', fontSize:11 }}>{w.Datadispaccio}</td>
+                      <td style={{ padding:'7px 12px', color:'#94a3b8', maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{w.Indirizzo}, {w.Localita}</td>
+                      <td style={{ padding:'7px 12px', color:'#475569' }}>{w.Pali || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -72,47 +322,34 @@ function VistaSub() {
   );
 }
 
-const NAV = [
-  {
-    title: 'Principale',
-    items: [
-      { to: '/admin', label: 'Dashboard', icon: '▦' },
-      { to: '/admin/pratiche', label: 'Pratiche', icon: '≡' },
-      { to: '/admin/vista-sub', label: 'Vista Sub', icon: '◉' },
-    ]
-  },
-  {
-    title: 'Gestione',
-    items: [
-      { to: '/admin/sub', label: 'Sub e squadre', icon: '◈' },
-      { to: '/admin/link', label: 'Link attivi', icon: '⊕' },
-      { to: '/admin/utenti', label: 'Utenti', icon: '⊙' },
-    ]
-  }
-];
-
-function MappaSquadra({ wr, onClose }) {
+// ── PANNELLO + MAPPA ──
+function PannelloWR({ squadra, wr, onClose }) {
+  const [showMappa, setShowMappa] = useState(false);
+  const [search, setSearch] = useState('');
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
-  const markersRef = useRef({});
-  const [search, setSearch] = useState('');
-  const [notFound, setNotFound] = useState(false);
 
-  const cercaWR = () => {
-    const q = search.trim();
-    if (!q || !mapInstanceRef.current) return;
-    const marker = markersRef.current[q];
-    if (marker) {
-      mapInstanceRef.current.setView(marker.getLatLng(), 15, { animate: true });
-      marker.openPopup();
-      setNotFound(false);
-    } else {
-      setNotFound(true);
-    }
+  const oggi = new Date();
+  const isOld = (d) => {
+    if (!d) return false;
+    let date;
+    if (d.includes('-') && d.indexOf('-') === 4) date = new Date(d);
+    else if (d.includes('/')) { const p = d.split('/'); date = new Date(p[2], p[1]-1, p[0]); }
+    else return false;
+    return (oggi - date) / (1000*60*60*24) > 90;
   };
 
+  const filtered = wr.filter(w =>
+    !search || w.WR?.toString().includes(search) ||
+    w.Indirizzo?.toLowerCase().includes(search.toLowerCase()) ||
+    w.Localita?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const conCoord = wr.filter(w => parseFloat(w.Latitudine) && parseFloat(w.Longitudine)).length;
+  const oltre90 = wr.filter(w => isOld(w.Datadispaccio)).length;
+
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
+    if (!showMappa || !mapRef.current || mapInstanceRef.current) return;
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
@@ -126,109 +363,62 @@ function MappaSquadra({ wr, onClose }) {
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, opacity: 0.7 }).addTo(map);
       const bounds = [];
       wr.forEach(w => {
-        const lat = parseFloat(w.Latitudine);
-        const lon = parseFloat(w.Longitudine);
-        if (!lat || !lon || isNaN(lat) || isNaN(lon)) return;
-        const marker = L.circleMarker([lat, lon], { radius: 8, fillColor: '#3b82f6', color: 'white', weight: 2, fillOpacity: 0.9 })
+        const lat = parseFloat(w.Latitudine) || parseFloat(w.LatInferita);
+        const lon = parseFloat(w.Longitudine) || parseFloat(w.LonInferita);
+        if (!lat || !lon) return;
+        L.circleMarker([lat, lon], { radius: 8, fillColor: isOld(w.Datadispaccio) ? '#ef4444' : '#3b82f6', color: 'white', weight: 2, fillOpacity: 0.9 })
           .addTo(map)
-          .bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:#3b82f6">WR ${w.WR}</b><br/>${w.Indirizzo || ''}, ${w.Localita || ''}<br/>Stato: <b>${w.StatoWR || 'N/D'}</b><br/>${lat && lon ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}" target="_blank" style="color:#22c55e">📍 Indicazioni</a>` : ''}</div>`);
-        markersRef.current[String(w.WR)] = marker;
+          .bindPopup(`<b>WR ${w.WR}</b><br/>${w.Indirizzo}, ${w.Localita}<br/>${w.StatoWR}`);
         bounds.push([lat, lon]);
       });
-      if (bounds.length > 0) map.fitBounds(bounds, { padding: [30, 30] });
+      if (bounds.length > 0) map.fitBounds(bounds, { padding: [20, 20] });
       mapInstanceRef.current = map;
     };
     document.head.appendChild(script);
     return () => { if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; } };
-  }, [wr]);
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: '90vw', height: '85vh', background: 'var(--panel)', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)' }}>
-            Mappa — {wr.filter(w => w.Latitudine && w.Longitudine).length} punti su {wr.length} WR
-          </span>
-          <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', alignItems: 'center' }}>
-            <input
-              value={search}
-              onChange={e => { setSearch(e.target.value); setNotFound(false); }}
-              onKeyDown={e => e.key === 'Enter' && cercaWR()}
-              placeholder="Cerca WR..."
-              style={{ background: 'var(--bg)', border: `1px solid ${notFound ? 'var(--red)' : 'var(--border)'}`, color: 'var(--text)', padding: '5px 10px', borderRadius: 6, fontSize: 12, outline: 'none', width: 140 }}
-            />
-            <button onClick={cercaWR} style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--accent)', padding: '5px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
-              Cerca
-            </button>
-            {notFound && <span style={{ fontSize: 11, color: 'var(--red)' }}>Non trovata</span>}
-          </div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer' }}>×</button>
-        </div>
-        <div ref={mapRef} style={{ flex: 1 }} />
-      </div>
-    </div>
-  );
-}
-
-function PannelloWR({ squadra, wr, onClose }) {
-  const [showMappa, setShowMappa] = useState(false);
-  const [search, setSearch] = useState('');
-
-  const oggi = new Date();
-  const isOld = (d) => {
-    if (!d) return false;
-    const p = d.split('/');
-    if (p.length !== 3) return false;
-    return (oggi - new Date(p[2], p[1] - 1, p[0])) / (1000 * 60 * 60 * 24) > 90;
-  };
-
-  const filtered = wr.filter(w =>
-    !search || w.WR?.toString().includes(search) ||
-    w.Indirizzo?.toLowerCase().includes(search.toLowerCase()) ||
-    w.Localita?.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const conCoord = wr.filter(w => parseFloat(w.Latitudine) && parseFloat(w.Longitudine)).length;
-  const oltre90 = wr.filter(w => isOld(w.Datadispaccio)).length;
+  }, [showMappa, wr]);
 
   return (
     <>
-      {showMappa && <MappaSquadra wr={wr} onClose={() => setShowMappa(false)} />}
-      <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: 420, background: 'var(--panel)', borderLeft: '1px solid var(--border)', zIndex: 500, display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.4)' }}>
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 14, fontWeight: 600, color: 'var(--accent)' }}>{squadra}</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-              {wr.length} WR totali
-              {oltre90 > 0 && <span style={{ color: 'var(--red)', marginLeft: 8 }}>⚠ {oltre90} oltre 90gg</span>}
+      {showMappa && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ width:'90vw', height:'85vh', background:'#111827', borderRadius:12, overflow:'hidden', display:'flex', flexDirection:'column' }}>
+            <div style={{ padding:'12px 16px', borderBottom:'1px solid #1e2330', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <span style={{ fontFamily:'monospace', fontSize:12, color:'#3b82f6' }}>{squadra} — {conCoord} punti su {wr.length} WR</span>
+              <button onClick={() => setShowMappa(false)} style={{ background:'transparent', border:'none', color:'#64748b', fontSize:20, cursor:'pointer' }}>×</button>
             </div>
+            <div ref={mapRef} style={{ flex:1 }} />
           </div>
-          <button onClick={() => setShowMappa(true)} style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', color: 'var(--green)', padding: '6px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
-            ◎ Mappa ({conCoord})
-          </button>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer' }}>×</button>
         </div>
-        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca WR, indirizzo..." style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 10px', borderRadius: 6, fontSize: 12, outline: 'none' }} />
+      )}
+      <div style={{ position:'fixed', right:0, top:0, bottom:0, width:380, background:'#111827', borderLeft:'1px solid #1e2330', zIndex:500, display:'flex', flexDirection:'column' }}>
+        <div style={{ padding:'14px 16px', borderBottom:'1px solid #1e2330', display:'flex', alignItems:'center', gap:10 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontFamily:'monospace', fontSize:13, fontWeight:600, color:'#3b82f6' }}>{squadra}</div>
+            <div style={{ fontSize:11, color:'#475569', marginTop:2 }}>{wr.length} WR {oltre90 > 0 && <span style={{ color:'#ef4444', marginLeft:6 }}>⚠ {oltre90} oltre 90gg</span>}</div>
+          </div>
+          <button onClick={() => setShowMappa(true)} style={{ background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.3)', color:'#22c55e', padding:'5px 10px', borderRadius:6, fontSize:11, cursor:'pointer' }}>◎ Mappa ({conCoord})</button>
+          <button onClick={onClose} style={{ background:'transparent', border:'none', color:'#475569', fontSize:20, cursor:'pointer' }}>×</button>
         </div>
-        <div style={{ flex: 1, overflow: 'auto' }}>
+        <div style={{ padding:'8px 12px', borderBottom:'1px solid #1e2330' }}>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca WR, indirizzo..." style={{ width:'100%', background:'#0a0d14', border:'1px solid #1e2330', color:'#e2e8f0', padding:'5px 8px', borderRadius:5, fontSize:11, outline:'none' }} />
+        </div>
+        <div style={{ flex:1, overflow:'auto' }}>
           {filtered.map((w, i) => {
             const old = isOld(w.Datadispaccio);
-            const lat = parseFloat(w.Latitudine);
-            const lon = parseFloat(w.Longitudine);
             return (
-              <div key={i} style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', borderLeft: old ? '3px solid var(--red)' : '3px solid transparent' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>WR {w.WR}</span>
-                  <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: old ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)', color: old ? 'var(--red)' : 'var(--green)' }}>
-                    {old ? '+90gg' : w.StatoWR || 'N/D'}
-                  </span>
+              <div key={i} style={{ padding:'9px 14px', borderBottom:'1px solid #0f1420', borderLeft:`3px solid ${old ? '#ef4444' : 'transparent'}` }}>
+                <div style={{ display:'flex', gap:8, marginBottom:2 }}>
+                  <span style={{ fontFamily:'monospace', fontSize:11, color:'#3b82f6', fontWeight:600 }}>{w.WR}</span>
+                  <span style={{ fontSize:9, padding:'2px 5px', borderRadius:3, background: old ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.1)', color: old ? '#ef4444' : '#22c55e' }}>{old ? '+90gg' : w.StatoWR}</span>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text)', marginBottom: 2 }}>{w.Indirizzo}{w.Localita ? `, ${w.Localita}` : ''}</div>
-                <div style={{ display: 'flex', gap: 12, fontSize: 10, color: 'var(--muted)' }}>
+                <div style={{ fontSize:11, color:'#64748b', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{w.Indirizzo}, {w.Localita}</div>
+                <div style={{ display:'flex', gap:10, marginTop:3, fontSize:10, color:'#475569' }}>
                   <span>{w.Datadispaccio}</span>
                   {w.Pali && <span>Pali: {w.Pali}</span>}
-                  {lat && lon && <a href={`https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`} target="_blank" rel="noreferrer" style={{ color: 'var(--green)' }}>📍 Nav</a>}
+                  {(parseFloat(w.Latitudine) || parseFloat(w.LatInferita)) && (
+                    <a href={`https://www.google.com/maps/dir/?api=1&destination=${w.Latitudine||w.LatInferita},${w.Longitudine||w.LonInferita}`} target="_blank" rel="noreferrer" style={{ color:'#22c55e' }}>📍</a>
+                  )}
                 </div>
               </div>
             );
@@ -239,128 +429,114 @@ function PannelloWR({ squadra, wr, onClose }) {
   );
 }
 
-function DashboardHome() {
-  const { API } = useAuth();
+function VistaSub() {
+  const { API, user } = useAuth();
   const [wr, setWr] = useState([]);
-  const [squadre, setSquadre] = useState([]);
-  const [selectedSquadra, setSelectedSquadra] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [selectedSq, setSelectedSq] = useState('');
+  const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/mini-squadre`)])
-      .then(([wrR, sqR]) => { setWr(wrR.data); setSquadre(sqR.data); })
-      .catch(() => {}).finally(() => setLoading(false));
-  }, [API]);
+  useEffect(() => { axios.get(`${API}/wr`).then(r => setWr(r.data)).catch(() => {}); }, [API]);
 
-  const oggi = new Date();
-  const isOld = (d) => {
-    if (!d) return false;
-    const p = d.split('/');
-    if (p.length !== 3) return false;
-    return (oggi - new Date(p[2], p[1] - 1, p[0])) / (1000 * 60 * 60 * 24) > 90;
-  };
+  const squadre = [...new Set(wr.map(w => w.Sq).filter(Boolean))].sort();
+  const wrFiltrati = wr.filter(w => w.Sq === selectedSq && w.StatoWR?.toUpperCase() !== 'NUOVA');
+  const fakeUser = { ...user, role: 'sub', sub_code: selectedSq };
 
-  const oltre90 = wr.filter(w => isOld(w.Datadispaccio)).length;
-  const [tipoFiltro, setTipoFiltro] = useState('tutti'); // 'tutti' | 'sub' | 'interne'
-
-  const subMap = {};
-  wr.forEach(w => {
-    const sq = w.Sq || 'N/D';
-    if (!subMap[sq]) subMap[sq] = [];
-    subMap[sq].push(w);
-  });
-
-  const isSub = (cod) => cod.startsWith('S') && isNaN(cod.slice(1)) === false || /^S\d+/.test(cod);
-  const isInterna = (cod) => /^\d+$/.test(cod);
-
-  const filteredSubMap = Object.entries(subMap).filter(([cod]) => {
-    if (tipoFiltro === 'sub') return /^S\d+/.test(cod);
-    if (tipoFiltro === 'interne') return /^\d+$/.test(cod);
-    return true;
-  });
-
-  const wrSquadra = selectedSquadra ? (subMap[selectedSquadra] || []) : [];
-
-  if (loading) return <div style={{ padding: 40, color: 'var(--muted)', textAlign: 'center' }}>Caricamento dati...</div>;
+  if (loaded && selectedSq) {
+    return (
+      <div style={{ height:'calc(100vh - 48px)', overflow:'hidden', position:'relative' }}>
+        <div style={{ position:'absolute', top:10, left:10, zIndex:100, display:'flex', gap:8 }}>
+          <button onClick={() => setLoaded(false)} style={{ background:'rgba(0,0,0,0.8)', border:'1px solid #1e2330', color:'#e2e8f0', padding:'6px 12px', borderRadius:6, fontSize:12, cursor:'pointer' }}>← Torna</button>
+          <span style={{ background:'rgba(0,0,0,0.8)', border:'1px solid #1e2330', color:'#3b82f6', padding:'6px 12px', borderRadius:6, fontSize:12, fontFamily:'monospace' }}>Anteprima: {selectedSq}</span>
+        </div>
+        <SubDashboard previewMode={{ subCode: selectedSq, wrData: wrFiltrati }} />
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: '24px', paddingRight: selectedSquadra ? '460px' : '24px' }}>
-      {selectedSquadra && <PannelloWR squadra={selectedSquadra} wr={wrSquadra} onClose={() => setSelectedSquadra(null)} />}
-
-      <div style={{ fontSize: '18px', fontWeight: 500, marginBottom: '4px' }}>Dashboard</div>
-      <div style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '20px' }}>Panoramica di tutte le pratiche</div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '24px' }}>
-        {[
-          { label: 'WR totali', val: wr.length, color: 'var(--accent)' },
-          { label: 'Oltre 90gg', val: oltre90, color: oltre90 > 0 ? 'var(--red)' : 'var(--muted)' },
-          { label: 'Squadre/Sub', val: Object.keys(subMap).length, color: 'var(--green)' },
-          { label: 'Mini-squadre', val: squadre.length, color: 'var(--accent2)' },
-        ].map((s, i) => (
-          <div key={i} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: '10px', padding: '16px' }}>
-            <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>{s.label}</div>
-            <div style={{ fontSize: '28px', fontWeight: 500, color: s.color }}>{s.val}</div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--muted)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        WR per squadra/sub — clicca per vedere le pratiche
-        <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
-          {[['tutti','Tutti'],['sub','Sub (S...)'],['interne','Squadre interne']].map(([val, label]) => (
-            <button key={val} onClick={() => setTipoFiltro(val)}
-              style={{ padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer', border: '1px solid var(--border)', background: tipoFiltro === val ? 'var(--accent)' : 'var(--bg)', color: tipoFiltro === val ? 'white' : 'var(--muted)' }}>
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ background: 'var(--bg)' }}>
-              {['Codice', 'Nome', 'WR', 'Oltre 90gg', 'Con coord'].map(h => (
-                <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '11px', color: 'var(--muted)', fontWeight: 500, borderBottom: '1px solid var(--border)' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filteredSubMap.sort((a, b) => b[1].length - a[1].length).map(([cod, wrs], i) => {
-              const old = wrs.filter(w => isOld(w.Datadispaccio)).length;
-              const coord = wrs.filter(w => parseFloat(w.Latitudine) && parseFloat(w.Longitudine)).length;
-              const nome = wrs[0]?.Descrizione_Sq || '—';
-              const isSel = selectedSquadra === cod;
-              return (
-                <tr key={i} onClick={() => setSelectedSquadra(isSel ? null : cod)}
-                  style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer', background: isSel ? 'rgba(59,130,246,0.1)' : 'transparent', transition: 'background 0.15s' }}>
-                  <td style={{ padding: '10px 14px', fontFamily: 'var(--mono)', fontSize: '12px', color: 'var(--accent)', fontWeight: 600 }}>{cod}</td>
-                  <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--muted)' }}>{nome}</td>
-                  <td style={{ padding: '10px 14px', fontSize: '13px', fontWeight: 500 }}>{wrs.length}</td>
-                  <td style={{ padding: '10px 14px' }}>
-                    {old > 0 ? <span style={{ fontSize: '12px', color: 'var(--red)' }}>⚠ {old}</span> : <span style={{ fontSize: '12px', color: 'var(--muted)' }}>—</span>}
-                  </td>
-                  <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--muted)' }}>{coord}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+    <div style={{ padding:24 }}>
+      <div style={{ fontSize:18, fontWeight:500, marginBottom:4 }}>Vista Sub</div>
+      <div style={{ fontSize:13, color:'var(--muted)', marginBottom:24 }}>Scegli un sub per vedere la sua vista</div>
+      <div style={{ display:'flex', gap:12, alignItems:'center', marginBottom:20 }}>
+        <select value={selectedSq} onChange={e => setSelectedSq(e.target.value)}
+          style={{ background:'var(--panel)', border:'1px solid var(--border)', color:'var(--text)', padding:'8px 12px', borderRadius:8, fontSize:14, outline:'none', minWidth:200 }}>
+          <option value="">Seleziona squadra/sub...</option>
+          {squadre.map(s => { const nome = wr.find(w => w.Sq === s)?.Descrizione_Sq || ''; return <option key={s} value={s}>{s}{nome ? ` — ${nome}` : ''}</option>; })}
+        </select>
+        <button onClick={() => selectedSq && setLoaded(true)} disabled={!selectedSq}
+          style={{ background: selectedSq ? 'rgba(59,130,246,0.2)' : 'var(--bg)', border:`1px solid ${selectedSq ? 'var(--accent)' : 'var(--border)'}`, color: selectedSq ? 'var(--accent)' : 'var(--muted)', padding:'8px 16px', borderRadius:8, fontSize:14, cursor: selectedSq ? 'pointer' : 'not-allowed' }}>
+          Visualizza →
+        </button>
       </div>
     </div>
   );
 }
 
 export default function AdminDashboard() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [wr, setWr] = useState([]);
+  const [squadre, setSquadre] = useState([]);
+  const [selectedSquadra, setSelectedSquadra] = useState(null);
+  const { API } = useAuth();
+
+  useEffect(() => {
+    axios.get(`${API}/wr`).then(r => setWr(r.data)).catch(() => {});
+    axios.get(`${API}/mini-squadre`).then(r => setSquadre(r.data)).catch(() => {});
+  }, [API]);
+
+  const subMap = {};
+  wr.forEach(w => { if (!subMap[w.Sq]) subMap[w.Sq] = []; subMap[w.Sq].push(w); });
+
   return (
-    <Layout navItems={NAV}>
-      <Routes>
-        <Route path="/" element={<DashboardHome />} />
-        <Route path="/vista-sub" element={<VistaSub />} />
-        <Route path="/pratiche" element={<Pratiche />} />
-        <Route path="/sub" element={<SubSquadre />} />
-        <Route path="/link" element={<div style={{ padding: 24, color: 'var(--muted)' }}>Link attivi — in sviluppo</div>} />
-        <Route path="/utenti" element={<Utenti />} />
-      </Routes>
-    </Layout>
+    <div style={{ display:'flex', flexDirection:'column', height:'100vh' }}>
+      {/* Topbar */}
+      <div style={{ background:'#0d1117', borderBottom:'1px solid #1e2330', padding:'0 20px', height:48, display:'flex', alignItems:'center', gap:16, flexShrink:0 }}>
+        <div style={{ fontFamily:'monospace', fontSize:13, fontWeight:700, color:'#3b82f6', letterSpacing:3 }}>MDS<span style={{ color:'#1e2330' }}>/</span>WR</div>
+        <span style={{ fontSize:9, padding:'2px 8px', borderRadius:3, background:'rgba(59,130,246,0.1)', color:'#3b82f6', border:'1px solid rgba(59,130,246,0.2)', fontFamily:'monospace', letterSpacing:2 }}>ADMIN</span>
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:12 }}>
+          {user?.picture && <img src={user.picture} alt="" style={{ width:26, height:26, borderRadius:'50%', opacity:0.8 }} />}
+          <span style={{ fontSize:12, color:'#475569' }}>{user?.name}</span>
+          <button onClick={() => { logout(); navigate('/login'); }} style={{ background:'transparent', border:'1px solid #1e2330', color:'#475569', padding:'4px 10px', borderRadius:5, fontSize:11, cursor:'pointer', fontFamily:'monospace' }}>EXIT</button>
+        </div>
+      </div>
+
+      <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
+        {/* Sidebar */}
+        <div style={{ width:190, background:'#0d1117', borderRight:'1px solid #1e2330', padding:'16px 0', flexShrink:0, overflowY:'auto' }}>
+          {NAV.map((section, i) => (
+            <div key={i}>
+              <div style={{ fontSize:8, color:'#2d3748', padding:'10px 16px 4px', letterSpacing:3, fontFamily:'monospace' }}>{section.title}</div>
+              {section.items.map((item, j) => (
+                <NavLink key={j} to={item.to} style={({ isActive }) => ({
+                  display:'flex', alignItems:'center', gap:10, padding:'8px 16px', fontSize:12,
+                  color: isActive ? '#3b82f6' : '#475569',
+                  background: isActive ? 'rgba(59,130,246,0.08)' : 'transparent',
+                  borderLeft: isActive ? '2px solid #3b82f6' : '2px solid transparent',
+                  textDecoration:'none', fontFamily:'monospace', transition:'all 0.15s'
+                })}>
+                  <span style={{ fontSize:14, opacity:0.7 }}>{item.icon}</span>{item.label}
+                </NavLink>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div style={{ flex:1, overflow:'auto', background:'#0a0d14', position:'relative' }}>
+          {selectedSquadra && (
+            <PannelloWR squadra={selectedSquadra} wr={subMap[selectedSquadra] || []} onClose={() => setSelectedSquadra(null)} />
+          )}
+          <Routes>
+            <Route path="/" element={<DashboardHome />} />
+            <Route path="/pratiche" element={<Pratiche />} />
+            <Route path="/vista-sub" element={<VistaSub />} />
+            <Route path="/sub" element={<SubSquadre />} />
+            <Route path="/utenti" element={<Utenti />} />
+            <Route path="/link" element={<div style={{ padding:24, color:'var(--muted)' }}>Link attivi — in sviluppo</div>} />
+          </Routes>
+        </div>
+      </div>
+    </div>
   );
 }

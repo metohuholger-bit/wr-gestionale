@@ -170,13 +170,13 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
-    document.head.appendChild(link);
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
-    script.onload = () => {
+    if (!document.querySelector('link[href*="leaflet"]')) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+      document.head.appendChild(link);
+    }
+    const initMap = () => {
       const L = window.L;
       const map = L.map(mapRef.current, { center: [42.5, 11.5], zoom: 8 });
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
@@ -223,7 +223,11 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
       if (bounds.length > 0) map.fitBounds(bounds, { padding: [30, 30] });
       mapInstanceRef.current = map;
     };
-    document.head.appendChild(script);
+    if (window.L) {
+      initMap();
+    } else {
+      document.head.appendChild(script);
+    }
     return () => { if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; } };
   }, [wr, miniSquadre]);
 

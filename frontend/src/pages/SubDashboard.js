@@ -340,6 +340,8 @@ export default function SubDashboard({ previewMode }) {
   const [filtroCentrale, setFiltroCentrale] = useState('');
   const [filtroComune, setFiltroComune] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
+  const [colFilter, setColFilter] = useState({ WR:'', StatoWR:'', Centrale:'', Desc_Centrale:'', Indirizzo:'', Localita:'', Pali:'', JobType:'', Assistente:'' });
+  const setCol = (col, val) => setColFilter(prev => ({ ...prev, [col]: val }));
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [nomeNuovaSquadra, setNomeNuovaSquadra] = useState('');
   const [showCreaSquadra, setShowCreaSquadra] = useState(false);
@@ -388,6 +390,10 @@ export default function SubDashboard({ previewMode }) {
     if (filtroCentrale && !w.Centrale?.toLowerCase().includes(filtroCentrale.toLowerCase())) return false;
     if (filtroComune && w.Localita !== filtroComune) return false;
     if (filtroTipo && w.JobType !== filtroTipo) return false;
+    // Filtri colonna inline
+    for (const [col, val] of Object.entries(colFilter)) {
+      if (val && !String(w[col] || '').toLowerCase().includes(val.toLowerCase())) return false;
+    }
     if (search) {
       const q = search.toLowerCase();
       return Object.values(w).some(v => v && String(v).toLowerCase().includes(q));
@@ -523,11 +529,33 @@ export default function SubDashboard({ previewMode }) {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                     <tr style={{ background: '#1a1f2e' }}>
-                      <th style={{ padding: '9px 8px', width: 32 }}>
+                      <th style={{ padding: '9px 8px', width: 32, borderBottom: '1px solid var(--border)' }}>
                         <input type="checkbox" onChange={e => { if (e.target.checked) setSelectedRows(new Set(paginated.map(w => String(w.WR)))); else setSelectedRows(new Set()); }} />
                       </th>
-                      {['WR','Stato','Data','Centrale','Desc. Centrale','Indirizzo','Località','Pali','Tipo','Assistente'].map(h => (
-                        <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontSize: 11, color: 'var(--muted)', fontWeight: 500, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
+                      {[
+                        { label: 'WR', col: 'WR' },
+                        { label: 'Stato', col: 'StatoWR' },
+                        { label: 'Data', col: null },
+                        { label: 'Centrale', col: 'Centrale' },
+                        { label: 'Desc. Centrale', col: 'Desc_Centrale' },
+                        { label: 'Indirizzo', col: 'Indirizzo' },
+                        { label: 'Località', col: 'Localita' },
+                        { label: 'Pali', col: 'Pali' },
+                        { label: 'Tipo', col: 'JobType' },
+                        { label: 'Assistente', col: 'Assistente' },
+                      ].map(({ label, col }) => (
+                        <th key={label} style={{ padding: '6px 8px', textAlign: 'left', fontSize: 11, color: 'var(--muted)', fontWeight: 500, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>
+                          <div style={{ marginBottom: 4 }}>{label}</div>
+                          {col ? (
+                            <input
+                              value={colFilter[col] || ''}
+                              onChange={e => setCol(col, e.target.value)}
+                              placeholder="🔍"
+                              onClick={e => e.stopPropagation()}
+                              style={{ width: '100%', minWidth: 60, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '3px 6px', borderRadius: 4, fontSize: 10, outline: 'none' }}
+                            />
+                          ) : <div style={{ height: 22 }} />}
+                        </th>
                       ))}
                     </tr>
                   </thead>

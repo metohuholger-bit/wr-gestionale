@@ -282,7 +282,8 @@ function DashboardHome({ onSelectSquadra }) {
         {subList.map(([cod, cnt]) => {
           const over = wr.filter(w => w.Sq === cod && (daysDiff(w.Datadispaccio)||0) > 90).length;
           return (
-            <button key={cod} onClick={() => setSelectedSub(selectedSub === cod ? null : cod)}
+            <React.Fragment key={cod}>
+            <button onClick={() => setSelectedSub(selectedSub === cod ? null : cod)}
               className="sub-pill"
               style={{ padding:'5px 12px', borderRadius:20, border:`1px solid ${selectedSub === cod ? '#3b82f6' : '#252a3a'}`, background: selectedSub === cod ? 'rgba(59,130,246,0.15)' : 'transparent', color: selectedSub === cod ? '#3b82f6' : '#94a3b8', fontSize:11, cursor:'pointer', fontFamily:'monospace', opacity: selectedSub === cod ? 1 : 0.7, position:'relative' }}>
               {cod} <span style={{ color:'#475569' }}>({cnt})</span>
@@ -293,6 +294,7 @@ function DashboardHome({ onSelectSquadra }) {
               style={{ padding:'4px 7px', borderRadius:20, border:'1px solid #1e2330', background:'transparent', color:'#475569', fontSize:10, cursor:'pointer' }}>
               ◎
             </button>
+            </React.Fragment>
           );
         })}
       </div>

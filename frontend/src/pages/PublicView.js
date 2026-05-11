@@ -28,18 +28,45 @@ function Mappa({ wr, selected, onSelect }) {
         const lon = parseFloat(w.Longitudine) || parseFloat(w.LonInferita);
         if (!lat || !lon || isNaN(lat) || isNaN(lon)) return;
         const inferred = !!w.CoordInferita;
-        const marker = L.circleMarker([lat, lon], {
-          radius: 9, fillColor: '#3b82f6',
-          color: inferred ? '#f59e0b' : 'white',
-          weight: inferred ? 3 : 2,
-          fillOpacity: inferred ? 0.6 : 0.9
-        }).addTo(map)
-          .bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:#3b82f6">WR ${w.WR}</b><br/>${w.Indirizzo||''}, ${w.Localita||''}<br/>Stato: <b>${w.StatoWR}</b>${inferred ? '<br/><span style="color:#f59e0b">⚠ Posizione approssimativa</span>' : ''}</div>`);
+
+        // Icona con etichetta WR visibile sempre
+        const icon = L.divIcon({
+          className: '',
+          html: `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer">
+            <div style="background:#1e2330;color:#3b82f6;font-family:monospace;font-size:10px;font-weight:700;padding:2px 5px;border-radius:3px;border:1px solid #3b82f6;white-space:nowrap;margin-bottom:2px">${w.WR}</div>
+            <div style="width:14px;height:14px;background:#3b82f6;border:2px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.5);${inferred ? 'border-color:#f59e0b;opacity:0.7' : ''}"></div>
+          </div>`,
+          iconSize: [60, 32],
+          iconAnchor: [30, 32],
+          popupAnchor: [0, -34]
+        });
+
+        const navLink = (lat && lon) ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}" target="_blank" style="display:inline-block;margin-top:8px;background:#22c55e;color:white;padding:6px 12px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600">📍 Indicazioni</a>` : '';
+
+        const popup = `<div style="font-family:sans-serif;font-size:13px;min-width:220px;max-width:280px">
+          <div style="font-family:monospace;font-size:15px;font-weight:700;color:#3b82f6;margin-bottom:4px">WR ${w.WR}</div>
+          <div style="color:#888;font-size:11px;margin-bottom:8px">${w.Datadispaccio || ''}</div>
+          ${w.Indirizzo ? `<div style="margin-bottom:4px"><b>📍</b> ${w.Indirizzo}${w.Localita ? ', '+w.Localita : ''}</div>` : ''}
+          ${w.StatoWR ? `<div style="margin-bottom:4px"><b>Stato:</b> <span style="color:${w.StatoWR==='SOSPESA'?'#f59e0b':w.StatoWR==='IN CARICO'?'#22c55e':'#94a3b8'}">${w.StatoWR}</span></div>` : ''}
+          ${w.JobType ? `<div style="margin-bottom:4px"><b>Tipo:</b> ${w.JobType}</div>` : ''}
+          ${w.Pali ? `<div style="margin-bottom:4px"><b>Pali:</b> ${w.Pali}</div>` : ''}
+          ${w.Desc_Centrale || w.Centrale ? `<div style="margin-bottom:4px"><b>Centrale:</b> ${w.Desc_Centrale || w.Centrale}</div>` : ''}
+          ${w.Assistente ? `<div style="margin-bottom:4px"><b>Assistente:</b> ${w.Assistente}</div>` : ''}
+          ${w.Recapito ? `<div style="margin-bottom:4px"><b>Tel:</b> ${w.Recapito}</div>` : ''}
+          ${w.Note ? `<div style="margin-bottom:4px;font-size:11px;color:#666"><b>Note:</b> ${w.Note.substring(0,100)}${w.Note.length>100?'...':''}</div>` : ''}
+          ${inferred ? `<div style="color:#f59e0b;font-size:11px;margin-top:4px">⚠ Posizione approssimativa</div>` : ''}
+          ${navLink}
+        </div>`;
+
+        const marker = L.marker([lat, lon], { icon })
+          .addTo(map)
+          .bindPopup(popup, { maxWidth: 300 });
+
         marker.on('click', () => onSelect(w));
         markersRef.current[String(w.WR)] = marker;
         bounds.push([lat, lon]);
       });
-      if (bounds.length > 0) map.fitBounds(bounds, { padding: [30, 30] });
+      if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
       mapInstanceRef.current = map;
     };
     document.head.appendChild(script);
@@ -51,8 +78,8 @@ function Mappa({ wr, selected, onSelect }) {
     const lat = parseFloat(selected.Latitudine) || parseFloat(selected.LatInferita);
     const lon = parseFloat(selected.Longitudine) || parseFloat(selected.LonInferita);
     if (lat && lon) {
-      mapInstanceRef.current.setView([lat, lon], 14, { animate: true });
-      markersRef.current[String(selected.WR)]?.openPopup();
+      mapInstanceRef.current.setView([lat, lon], 15, { animate: true });
+      setTimeout(() => markersRef.current[String(selected.WR)]?.openPopup(), 400);
     }
   }, [selected]);
 
@@ -64,7 +91,7 @@ export default function PublicView() {
   const [data, setData] = useState(null);
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState('');
-  const [view, setView] = useState('dettaglio');
+  const [view, setView] = useState('lista');
 
   useEffect(() => {
     axios.get(`${API}/view/${token}`)
@@ -73,15 +100,15 @@ export default function PublicView() {
   }, [token]);
 
   if (error) return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-      <div style={{ fontSize: 32 }}>⚠</div>
-      <div style={{ color: 'var(--red)', fontSize: 14 }}>{error}</div>
+    <div style={{ minHeight: '100vh', background: '#0f1117', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+      <div style={{ fontSize: 40 }}>⚠</div>
+      <div style={{ color: '#ef4444', fontSize: 14 }}>{error}</div>
     </div>
   );
 
   if (!data) return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ color: 'var(--muted)', fontSize: 14 }}>Caricamento...</div>
+    <div style={{ minHeight: '100vh', background: '#0f1117', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ color: '#64748b', fontSize: 14 }}>Caricamento...</div>
     </div>
   );
 
@@ -96,80 +123,75 @@ export default function PublicView() {
   };
 
   return (
-    <div style={{ height: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ background: 'var(--panel)', borderBottom: '1px solid var(--border)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 600, color: 'var(--accent)', letterSpacing: 2 }}>
-          MDS<span style={{ color: 'var(--muted)' }}>/</span>WR
+    <div style={{ height: '100vh', background: '#0f1117', color: '#e2e8f0', display: 'flex', flexDirection: 'column', fontFamily: 'IBM Plex Sans, sans-serif' }}>
+      {/* Header */}
+      <div style={{ background: '#171b26', borderBottom: '1px solid #252a3a', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: '#3b82f6', letterSpacing: 2 }}>
+          MDS<span style={{ color: '#64748b' }}>/</span>WR
         </div>
-        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{data.squadra} — {data.wr.length} pratiche</span>
+        <span style={{ fontSize: 12, color: '#64748b' }}>{data.squadra} — {data.wr.length} pratiche</span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-          <button onClick={() => setView('dettaglio')} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid var(--border)', background: view === 'dettaglio' ? 'var(--accent)' : 'transparent', color: view === 'dettaglio' ? 'white' : 'var(--muted)', fontSize: 12, cursor: 'pointer' }}>≡ Lista</button>
-          <button onClick={() => setView('mappa')} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid var(--border)', background: view === 'mappa' ? 'var(--accent)' : 'transparent', color: view === 'mappa' ? 'white' : 'var(--muted)', fontSize: 12, cursor: 'pointer' }}>◎ Mappa</button>
+          {['lista','mappa'].map(v => (
+            <button key={v} onClick={() => setView(v)}
+              style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: view === v ? '#3b82f6' : '#252a3a', color: view === v ? 'white' : '#94a3b8', fontSize: 13, cursor: 'pointer', fontWeight: view === v ? 600 : 400 }}>
+              {v === 'lista' ? '≡ Lista' : '◎ Mappa'}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <div style={{ width: 280, background: 'var(--panel)', borderRight: '1px solid var(--border)', overflow: 'auto', flexShrink: 0 }}>
+      {/* Content */}
+      {view === 'lista' ? (
+        <div style={{ flex: 1, overflow: 'auto' }}>
           {data.wr.map((w, i) => {
             const old = isOld(w.Datadispaccio);
+            const isSel = selected?.WR === w.WR;
             return (
-              <div key={i} onClick={() => { setSelected(w); setView('dettaglio'); }}
-                style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', cursor: 'pointer', background: selected?.WR === w.WR ? 'rgba(59,130,246,0.1)' : 'transparent', borderLeft: selected?.WR === w.WR ? '3px solid var(--accent)' : old ? '3px solid var(--red)' : '3px solid transparent' }}>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent)', marginBottom: 2 }}>WR {w.WR}</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.Indirizzo}, {w.Localita}</div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span style={{ fontSize: 10, padding: '2px 5px', background: old ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)', color: old ? 'var(--red)' : 'var(--green)', borderRadius: 3 }}>{old ? '+90gg' : w.StatoWR || 'N/D'}</span>
-                  <span style={{ fontSize: 10, color: 'var(--muted)' }}>{w.Datadispaccio}</span>
+              <div key={i} onClick={() => setSelected(isSel ? null : w)}
+                style={{ padding: '14px 16px', borderBottom: '1px solid #252a3a', cursor: 'pointer', background: isSel ? 'rgba(59,130,246,0.1)' : 'transparent', borderLeft: `4px solid ${isSel ? '#3b82f6' : old ? '#ef4444' : 'transparent'}` }}>
+                <div style={{ fontFamily: 'monospace', fontSize: 14, color: '#3b82f6', fontWeight: 700, marginBottom: 4 }}>WR {w.WR}</div>
+                <div style={{ fontSize: 13, marginBottom: 6 }}>{w.Indirizzo}{w.Localita ? ', '+w.Localita : ''}</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: old ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)', color: old ? '#ef4444' : '#22c55e', fontWeight: 600 }}>{old ? '+90gg' : w.StatoWR}</span>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>{w.Datadispaccio}</span>
+                  {w.Pali && <span style={{ fontSize: 11, color: '#64748b' }}>• {w.Pali} pali</span>}
                 </div>
+                {isSel && (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #252a3a' }}>
+                    {[
+                      ['Tipo', w.JobType], ['Centrale', w.Desc_Centrale || w.Centrale],
+                      ['Assistente', w.Assistente], ['Recapito', w.Recapito],
+                      ['Note', w.Note],
+                    ].filter(([,v]) => v && v.trim()).map(([label, val], j) => (
+                      <div key={j} style={{ display: 'flex', gap: 10, marginBottom: 6, fontSize: 13 }}>
+                        <span style={{ color: '#64748b', minWidth: 90, fontSize: 12, flexShrink: 0 }}>{label}</span>
+                        <span style={{ color: '#e2e8f0' }}>{val}</span>
+                      </div>
+                    ))}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                      {(w.Latitudine || w.LatInferita) && (
+                        <a href={`https://www.google.com/maps/dir/?api=1&destination=${w.Latitudine||w.LatInferita},${w.Longitudine||w.LonInferita}`}
+                          target="_blank" rel="noreferrer"
+                          style={{ background: '#22c55e', color: 'white', padding: '10px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+                          📍 Indicazioni
+                        </a>
+                      )}
+                      <button onClick={e => { e.stopPropagation(); setView('mappa'); }}
+                        style={{ background: '#3b82f6', color: 'white', padding: '10px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+                        ◎ Mappa
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
-
-        {view === 'mappa' ? (
-          <div style={{ flex: 1 }}>
-            <Mappa wr={data.wr} selected={selected} onSelect={w => setSelected(w)} />
-          </div>
-        ) : selected ? (
-          <div style={{ flex: 1, padding: 24, overflow: 'auto' }}>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 16, color: 'var(--accent)', marginBottom: 4 }}>WR {selected.WR}</div>
-            <div style={{ fontSize: 12, color: 'var(--accent2)', fontWeight: 500, marginBottom: 16 }}>DISPACCIO {selected.Datadispaccio}</div>
-            {[
-              ['Tipo', selected.JobType],
-              ['Indirizzo', `${selected.Indirizzo||''}, ${selected.Localita||''}`],
-              ['Assistente', selected.Assistente],
-              ['Recapito', selected.Recapito],
-              ['N° Pali', selected.Pali],
-              ['Centrale', selected.Desc_Centrale || selected.Centrale],
-              ['Stato', selected.StatoWR],
-              ['Note', selected.Note],
-              ['Riepilogo', selected.RiepilogoPrev],
-            ].filter(([, v]) => v && v.trim()).map(([label, val], i) => (
-              <div key={i} style={{ display: 'flex', gap: 12, marginBottom: 10, fontSize: 13 }}>
-                <span style={{ color: 'var(--muted)', minWidth: 100, fontSize: 12, flexShrink: 0 }}>{label}</span>
-                <span style={{ color: 'var(--text)', fontWeight: 500 }}>{val}</span>
-              </div>
-            ))}
-            <div style={{ display: 'flex', gap: 10, marginTop: 24, flexWrap: 'wrap' }}>
-              {(selected.Latitudine || selected.LatInferita) && (
-                <a href={`https://www.google.com/maps/dir/?api=1&destination=${selected.Latitudine||selected.LatInferita},${selected.Longitudine||selected.LonInferita}`}
-                  target="_blank" rel="noreferrer"
-                  style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', color: 'var(--green)', padding: '10px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: 'none' }}>
-                  📍 Indicazioni stradali
-                </a>
-              )}
-              <button onClick={() => setView('mappa')}
-                style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--accent)', padding: '10px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>
-                ◎ Vedi su mappa
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 14 }}>
-            Seleziona una pratica dalla lista
-          </div>
-        )}
-      </div>
+      ) : (
+        <div style={{ flex: 1 }}>
+          <Mappa wr={data.wr} selected={selected} onSelect={w => setSelected(w)} />
+        </div>
+      )}
     </div>
   );
 }

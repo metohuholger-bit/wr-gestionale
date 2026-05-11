@@ -337,6 +337,12 @@ export default function SubDashboard({ previewMode }) {
   const [selectedWR, setSelectedWR] = useState(null);
   const [search, setSearch] = useState('');
   const [filtroStato, setFiltroStato] = useState('');
+  const [filtroCentrale, setFiltroCentrale] = useState('');
+  const [filtroComune, setFiltroComune] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('');
+  const [selectedRows, setSelectedRows] = useState(new Set());
+  const [nomeNuovaSquadra, setNomeNuovaSquadra] = useState('');
+  const [showCreaSquadra, setShowCreaSquadra] = useState(false);
   const [filtro90, setFiltro90] = useState(false);
   const [page, setPage] = useState(1);
   const PER_PAGE = 100;
@@ -372,13 +378,19 @@ export default function SubDashboard({ previewMode }) {
   const oltre90 = wr.filter(w => isOld(w.Datadispaccio)).length;
   const conCoord = wr.filter(w => parseFloat(w.Latitudine) && parseFloat(w.Longitudine)).length;
   const stati = [...new Set(wr.map(w => w.StatoWR).filter(Boolean))].sort();
+  const centrali = [...new Set(wr.map(w => w.Centrale).filter(Boolean))].sort();
+  const comuni = [...new Set(wr.map(w => w.Localita).filter(Boolean))].sort();
+  const tipi = [...new Set(wr.map(w => w.JobType).filter(Boolean))].sort();
 
   const filtered = wr.filter(w => {
     if (filtroStato && w.StatoWR !== filtroStato) return false;
     if (filtro90 && !isOld(w.Datadispaccio)) return false;
+    if (filtroCentrale && !w.Centrale?.toLowerCase().includes(filtroCentrale.toLowerCase())) return false;
+    if (filtroComune && w.Localita !== filtroComune) return false;
+    if (filtroTipo && w.JobType !== filtroTipo) return false;
     if (search) {
       const q = search.toLowerCase();
-      return w.WR?.toString().includes(q) || w.Indirizzo?.toLowerCase().includes(q) || w.Localita?.toLowerCase().includes(q);
+      return Object.values(w).some(v => v && String(v).toLowerCase().includes(q));
     }
     return true;
   });
@@ -400,6 +412,30 @@ export default function SubDashboard({ previewMode }) {
     const newList = sq.wr_list.filter(w => w !== wrNum);
     await axios.put(`${API}/mini-squadre/${token}/wr`, newList);
     setMiniSquadre(prev => prev.map(s => s.link_token === token ? { ...s, wr_list: newList } : s));
+  };
+
+  const toggleRowSelect = (wrNum) => {
+    setSelectedRows(prev => {
+      const s = new Set(prev);
+      if (s.has(wrNum)) s.delete(wrNum);
+      else s.add(wrNum);
+      return s;
+    });
+  };
+
+  const creaSquadraFromTable = async () => {
+    if (!nomeNuovaSquadra || selectedRows.size === 0) return;
+    try {
+      const r = await axios.post(`${API}/mini-squadre`, {
+        nome: nomeNuovaSquadra, sub_code: subCode, wr_list: [...selectedRows]
+      });
+      setMiniSquadre(prev => [...prev, { nome: nomeNuovaSquadra, sub_code: subCode, wr_list: [...selectedRows], link_token: r.data.token }]);
+      navigator.clipboard.writeText(`${window.location.origin}/#/view/${r.data.token}`);
+      setNomeNuovaSquadra('');
+      setSelectedRows(new Set());
+      setShowCreaSquadra(false);
+      setActiveTab('squadre');
+    } catch (e) { console.error(e); }
   };
 
   const selectStyle = { background: 'var(--panel)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 6, fontSize: 12, outline: 'none' };
@@ -450,10 +486,19 @@ export default function SubDashboard({ previewMode }) {
         {activeTab === 'pratiche' ? (
           <>
             <div style={{ padding: '10px 20px', background: 'var(--panel)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
-              <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Cerca WR, indirizzo..." style={{ ...selectStyle, width: 220 }} />
+              <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Cerca tutto..." style={{ ...selectStyle, width: 180 }} />
               <select value={filtroStato} onChange={e => { setFiltroStato(e.target.value); setPage(1); }} style={selectStyle}>
                 <option value="">Tutti gli stati</option>
                 {stati.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <input value={filtroCentrale} onChange={e => { setFiltroCentrale(e.target.value); setPage(1); }} placeholder="Centrale (es. 575)..." style={{ ...selectStyle, width: 150 }} />
+              <select value={filtroComune} onChange={e => { setFiltroComune(e.target.value); setPage(1); }} style={selectStyle}>
+                <option value="">Tutti i comuni</option>
+                {comuni.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <select value={filtroTipo} onChange={e => { setFiltroTipo(e.target.value); setPage(1); }} style={selectStyle}>
+                <option value="">Tutti i tipi</option>
+                {tipi.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
               <button onClick={() => { setFiltro90(!filtro90); setPage(1); }}
                 style={{ background: filtro90 ? 'rgba(239,68,68,0.2)' : 'var(--bg)', border: `1px solid ${filtro90 ? 'var(--red)' : 'var(--border)'}`, color: filtro90 ? 'var(--red)' : 'var(--muted)', padding: '5px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
@@ -461,11 +506,26 @@ export default function SubDashboard({ previewMode }) {
               </button>
               <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--muted)' }}><span style={{ color: 'var(--accent)', fontWeight: 600 }}>{filtered.length}</span> / {wr.length} WR</span>
             </div>
+            {selectedRows.size > 0 && (
+              <div style={{ padding: '8px 20px', background: 'rgba(245,158,11,0.08)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
+                <span style={{ fontSize: 12, color: 'var(--accent2)' }}>🟡 {selectedRows.size} WR selezionate</span>
+                <input value={nomeNuovaSquadra} onChange={e => setNomeNuovaSquadra(e.target.value)} placeholder="Nome mini-squadra..."
+                  style={{ ...selectStyle, width: 200 }} />
+                <button onClick={creaSquadraFromTable} disabled={!nomeNuovaSquadra}
+                  style={{ background: nomeNuovaSquadra ? 'rgba(245,158,11,0.2)' : 'var(--bg)', border: `1px solid ${nomeNuovaSquadra ? 'var(--accent2)' : 'var(--border)'}`, color: nomeNuovaSquadra ? 'var(--accent2)' : 'var(--muted)', padding: '5px 12px', borderRadius: 6, fontSize: 12, cursor: nomeNuovaSquadra ? 'pointer' : 'not-allowed' }}>
+                  Crea e copia link
+                </button>
+                <button onClick={() => setSelectedRows(new Set())} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 12, cursor: 'pointer' }}>Deseleziona tutto</button>
+              </div>
+            )}
             <div style={{ flex: 1, overflow: 'auto' }}>
               {loading ? <div style={{ padding: 40, color: 'var(--muted)', textAlign: 'center' }}>Caricamento...</div> : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                     <tr style={{ background: '#1a1f2e' }}>
+                      <th style={{ padding: '9px 8px', width: 32 }}>
+                        <input type="checkbox" onChange={e => { if (e.target.checked) setSelectedRows(new Set(paginated.map(w => String(w.WR)))); else setSelectedRows(new Set()); }} />
+                      </th>
                       {['WR','Stato','Data','Indirizzo','Località','Pali','Tipo','Assistente'].map(h => (
                         <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontSize: 11, color: 'var(--muted)', fontWeight: 500, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
@@ -474,19 +534,23 @@ export default function SubDashboard({ previewMode }) {
                   <tbody>
                     {paginated.map((w, i) => {
                       const old = isOld(w.Datadispaccio);
+                      const isSel = selectedRows.has(String(w.WR));
                       return (
-                        <tr key={i} onClick={() => setSelectedWR(w)}
-                          style={{ borderBottom: '1px solid var(--border)', background: old ? 'rgba(239,68,68,0.04)' : 'transparent', cursor: 'pointer' }}
-                          onMouseEnter={e => e.currentTarget.style.background = old ? 'rgba(239,68,68,0.1)' : 'rgba(59,130,246,0.06)'}
-                          onMouseLeave={e => e.currentTarget.style.background = old ? 'rgba(239,68,68,0.04)' : 'transparent'}>
-                          <td style={{ padding: '7px 12px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)' }}>{w.WR}</td>
-                          <td style={{ padding: '7px 12px', color: old ? 'var(--red)' : 'var(--green)', fontSize: 11 }}>{w.StatoWR}</td>
-                          <td style={{ padding: '7px 12px', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{w.Datadispaccio}</td>
-                          <td style={{ padding: '7px 12px', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.Indirizzo}</td>
-                          <td style={{ padding: '7px 12px', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{w.Localita}</td>
-                          <td style={{ padding: '7px 12px', color: 'var(--muted)' }}>{w.Pali || '—'}</td>
-                          <td style={{ padding: '7px 12px', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--muted)' }}>{w.JobType}</td>
-                          <td style={{ padding: '7px 12px', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{w.Assistente}</td>
+                        <tr key={i}
+                          style={{ borderBottom: '1px solid var(--border)', background: isSel ? 'rgba(245,158,11,0.08)' : old ? 'rgba(239,68,68,0.04)' : 'transparent', cursor: 'pointer' }}
+                          onMouseEnter={e => e.currentTarget.style.background = isSel ? 'rgba(245,158,11,0.15)' : old ? 'rgba(239,68,68,0.1)' : 'rgba(59,130,246,0.06)'}
+                          onMouseLeave={e => e.currentTarget.style.background = isSel ? 'rgba(245,158,11,0.08)' : old ? 'rgba(239,68,68,0.04)' : 'transparent'}>
+                          <td style={{ padding: '7px 8px' }} onClick={e => { e.stopPropagation(); toggleRowSelect(String(w.WR)); }}>
+                            <input type="checkbox" checked={isSel} onChange={() => {}} />
+                          </td>
+                          <td style={{ padding: '7px 12px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)' }} onClick={() => setSelectedWR(w)}>{w.WR}</td>
+                          <td style={{ padding: '7px 12px', color: old ? 'var(--red)' : 'var(--green)', fontSize: 11 }} onClick={() => setSelectedWR(w)}>{w.StatoWR}</td>
+                          <td style={{ padding: '7px 12px', color: 'var(--muted)', whiteSpace: 'nowrap' }} onClick={() => setSelectedWR(w)}>{w.Datadispaccio}</td>
+                          <td style={{ padding: '7px 12px', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} onClick={() => setSelectedWR(w)}>{w.Indirizzo}</td>
+                          <td style={{ padding: '7px 12px', color: 'var(--muted)', whiteSpace: 'nowrap' }} onClick={() => setSelectedWR(w)}>{w.Localita}</td>
+                          <td style={{ padding: '7px 12px', color: 'var(--muted)' }} onClick={() => setSelectedWR(w)}>{w.Pali || '—'}</td>
+                          <td style={{ padding: '7px 12px', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--muted)' }} onClick={() => setSelectedWR(w)}>{w.JobType}</td>
+                          <td style={{ padding: '7px 12px', color: 'var(--muted)', whiteSpace: 'nowrap' }} onClick={() => setSelectedWR(w)}>{w.Assistente}</td>
                         </tr>
                       );
                     })}

@@ -40,6 +40,79 @@ function Counter({ value, color }) {
   return <span style={{ color }} ref={ref}>{display}</span>;
 }
 
+
+// ── STAT POPUP ──
+function StatPopup({ title, color, icon, wr, filterFn, onClose }) {
+  const subMap = {};
+  wr.filter(filterFn).forEach(w => {
+    const sq = w.Sq || 'N/D';
+    if (!subMap[sq]) subMap[sq] = [];
+    subMap[sq].push(w);
+  });
+  const sorted = Object.entries(subMap).sort((a,b) => b[1].length - a[1].length);
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:'#111827', border:`1px solid ${color}33`, borderRadius:14, width:520, maxHeight:'80vh', overflow:'hidden', display:'flex', flexDirection:'column', boxShadow:`0 0 40px ${color}22` }}>
+        <div style={{ padding:'16px 20px', borderBottom:`1px solid ${color}22`, display:'flex', alignItems:'center', gap:12 }}>
+          <span style={{ fontSize:20, color }}>{icon}</span>
+          <div>
+            <div style={{ fontFamily:'monospace', fontSize:10, letterSpacing:3, color:'#475569' }}>DETTAGLIO PER SQUADRA</div>
+            <div style={{ fontSize:15, fontWeight:700, color }}>{title}</div>
+          </div>
+          <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', color:'#475569', fontSize:22, cursor:'pointer' }}>×</button>
+        </div>
+        <div style={{ overflow:'auto', padding:'12px 0' }}>
+          {sorted.length === 0 ? (
+            <div style={{ padding:'24px', textAlign:'center', color:'#22c55e', fontSize:13 }}>✓ Nessuna WR in questa categoria</div>
+          ) : sorted.map(([sq, wrs], i) => (
+            <div key={sq} style={{ padding:'10px 20px', borderBottom:'1px solid #0f1420', display:'flex', alignItems:'center', gap:12, animationDelay:`${i*0.05}s` }}>
+              <div style={{ fontFamily:'monospace', fontSize:12, color, minWidth:60, fontWeight:700 }}>{sq}</div>
+              <div style={{ flex:1, height:6, background:'#1e2330', borderRadius:3, overflow:'hidden' }}>
+                <div style={{ height:'100%', background:`${color}`, borderRadius:3, width:`${(wrs.length/sorted[0][1].length)*100}%`, transition:'width 0.8s ease', opacity:0.8 }} />
+              </div>
+              <div style={{ fontFamily:'monospace', fontSize:13, color:'#e2e8f0', minWidth:30, textAlign:'right', fontWeight:600 }}>{wrs.length}</div>
+              <div style={{ fontSize:10, color:'#475569', minWidth:80 }}>{wrs[0]?.Descrizione_Sq?.slice(0,12) || ''}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ALERT BANNER ──
+function AlertBanner({ wr }) {
+  const [dismissed, setDismissed] = React.useState(false);
+  if (dismissed) return null;
+
+  const oggi = new Date();
+  const daysDiff = (d) => {
+    if (!d) return null;
+    let date;
+    if (d.includes('-') && d.indexOf('-') === 4) date = new Date(d);
+    else if (d.includes('/')) { const p = d.split('/'); date = new Date(p[2], p[1]-1, p[0]); }
+    else return null;
+    return (oggi - date) / (1000*60*60*24);
+  };
+
+  const urgenti = wr.filter(w => (w.Note || '').match(/670050|670100/));
+  const critici = wr.filter(w => (daysDiff(w.Datadispaccio) || 0) > 90);
+
+  if (urgenti.length === 0 && critici.length === 0) return null;
+
+  return (
+    <div style={{ background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.25)', borderRadius:8, padding:'10px 16px', marginBottom:16, display:'flex', alignItems:'center', gap:12 }}>
+      <span style={{ fontSize:18 }}>🚨</span>
+      <div style={{ flex:1 }}>
+        {urgenti.length > 0 && <div style={{ fontSize:12, color:'#ef4444', fontWeight:600 }}>⚡ {urgenti.length} WR urgenti (670050/670100) — squadre: {[...new Set(urgenti.map(w=>w.Sq))].join(', ')}</div>}
+        {critici.length > 0 && <div style={{ fontSize:12, color:'#f59e0b', marginTop: urgenti.length>0?2:0 }}>⚠ {critici.length} WR oltre 90gg — squadre: {[...new Set(critici.map(w=>w.Sq))].slice(0,5).join(', ')}{[...new Set(critici.map(w=>w.Sq))].length>5?'...':''}</div>}
+      </div>
+      <button onClick={() => setDismissed(true)} style={{ background:'transparent', border:'none', color:'#475569', cursor:'pointer', fontSize:16 }}>×</button>
+    </div>
+  );
+}
+
 // ── MINI BAR CHART ──
 function BarChart({ data, maxVal }) {
   return (
@@ -95,6 +168,7 @@ function DashboardHome() {
   const [miniSquadre, setMiniSquadre] = useState([]);
   const [selectedSub, setSelectedSub] = useState(null);
   const [selectedPanel, setSelectedPanel] = useState(null);
+  const [openPopup, setOpenPopup] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -149,12 +223,12 @@ function DashboardHome() {
   );
 
   const CARDS = [
-    { key:'totale', label:'WR TOTALI', icon:'◈', color:'#3b82f6', bg:'rgba(59,130,246,0.08)', border:'rgba(59,130,246,0.2)' },
-    { key:'over90', label:'OLTRE 90GG', icon:'⚠', color:'#ef4444', bg:'rgba(239,68,68,0.08)', border:'rgba(239,68,68,0.2)' },
-    { key:'avvicin', label:'60-90GG', icon:'◔', color:'#f59e0b', bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.2)' },
-    { key:'urgenti', label:'URGENTI', icon:'⚡', color:'#ec4899', bg:'rgba(236,72,153,0.08)', border:'rgba(236,72,153,0.2)' },
-    { key:'senzaCoord', label:'SENZA COORD', icon:'◎', color:'#64748b', bg:'rgba(100,116,139,0.08)', border:'rgba(100,116,139,0.2)' },
-    { key:'assegnate', label:'ASSEGNATE', icon:'✓', color:'#22c55e', bg:'rgba(34,197,94,0.08)', border:'rgba(34,197,94,0.2)' },
+    { key:'totale', label:'WR TOTALI', icon:'◈', color:'#3b82f6', bg:'rgba(59,130,246,0.08)', border:'rgba(59,130,246,0.2)', filterFn: w => true },
+    { key:'over90', label:'OLTRE 90GG', icon:'⚠', color:'#ef4444', bg:'rgba(239,68,68,0.08)', border:'rgba(239,68,68,0.2)', filterFn: w => (daysDiff(w.Datadispaccio)||0) > 90 },
+    { key:'avvicin', label:'60-90GG', icon:'◔', color:'#f59e0b', bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.2)', filterFn: w => { const d = daysDiff(w.Datadispaccio); return d !== null && d > 60 && d <= 90; } },
+    { key:'urgenti', label:'URGENTI', icon:'⚡', color:'#ec4899', bg:'rgba(236,72,153,0.08)', border:'rgba(236,72,153,0.2)', filterFn: w => !!(w.Note||'').match(/670050|670100/) },
+    { key:'senzaCoord', label:'SENZA COORD', icon:'◎', color:'#64748b', bg:'rgba(100,116,139,0.08)', border:'rgba(100,116,139,0.2)', filterFn: w => !parseFloat(w.Latitudine) && !parseFloat(w.Longitudine) },
+    { key:'assegnate', label:'ASSEGNATE', icon:'✓', color:'#22c55e', bg:'rgba(34,197,94,0.08)', border:'rgba(34,197,94,0.2)', filterFn: w => miniSquadre.some(s => s.wr_list?.includes(String(w.WR))) },
   ];
 
   return (
@@ -168,6 +242,17 @@ function DashboardHome() {
         .wr-row:hover { background: rgba(59,130,246,0.06) !important; }
       `}</style>
 
+      <AlertBanner wr={selectedSub ? filtered : wr} />
+      {openPopup && (
+        <StatPopup
+          title={openPopup.label}
+          color={openPopup.color}
+          icon={openPopup.icon}
+          wr={selectedSub ? filtered : wr}
+          filterFn={openPopup.filterFn}
+          onClose={() => setOpenPopup(null)}
+        />
+      )}
       {/* Header */}
       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:24 }}>
         <div>
@@ -210,7 +295,7 @@ function DashboardHome() {
       {/* Stat cards */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:10, marginBottom:24 }}>
         {CARDS.map((c, i) => (
-          <div key={c.key} className="stat-card" style={{ animationDelay:`${i*0.07}s`, background:c.bg, border:`1px solid ${c.border}`, borderRadius:10, padding:'14px 16px', cursor:'default' }}>
+          <div key={c.key} className="stat-card" onClick={() => setOpenPopup(c)} style={{ animationDelay:`${i*0.07}s`, background:c.bg, border:`1px solid ${c.border}`, borderRadius:10, padding:'14px 16px', cursor:'pointer' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
               <div style={{ fontSize:9, fontFamily:'monospace', letterSpacing:2, color:c.color, fontWeight:600 }}>{c.label}</div>
               <div style={{ fontSize:16, color:c.color, opacity:0.6 }}>{c.icon}</div>

@@ -162,7 +162,7 @@ function Donut({ segments, size = 80 }) {
 }
 
 // ── MAIN DASHBOARD ──
-function DashboardHome() {
+function DashboardHome({ onSelectSquadra }) {
   const { API } = useAuth();
   const [wr, setWr] = useState([]);
   const [miniSquadre, setMiniSquadre] = useState([]);
@@ -287,6 +287,11 @@ function DashboardHome() {
               style={{ padding:'5px 12px', borderRadius:20, border:`1px solid ${selectedSub === cod ? '#3b82f6' : '#252a3a'}`, background: selectedSub === cod ? 'rgba(59,130,246,0.15)' : 'transparent', color: selectedSub === cod ? '#3b82f6' : '#94a3b8', fontSize:11, cursor:'pointer', fontFamily:'monospace', opacity: selectedSub === cod ? 1 : 0.7, position:'relative' }}>
               {cod} <span style={{ color:'#475569' }}>({cnt})</span>
               {over > 0 && <span style={{ marginLeft:4, color:'#ef4444', fontSize:9 }}>⚠{over}</span>}
+            </button>
+            <button onClick={() => onSelectSquadra && onSelectSquadra(cod)}
+              title="Apri mappa e pratiche"
+              style={{ padding:'4px 7px', borderRadius:20, border:'1px solid #1e2330', background:'transparent', color:'#475569', fontSize:10, cursor:'pointer' }}>
+              ◎
             </button>
           );
         })}
@@ -613,7 +618,7 @@ export default function AdminDashboard() {
             <PannelloWR squadra={selectedSquadra} wr={subMap[selectedSquadra] || []} onClose={() => setSelectedSquadra(null)} />
           )}
           <Routes>
-            <Route path="/" element={<DashboardHome />} />
+            <Route path="/" element={<DashboardHome onSelectSquadra={setSelectedSquadra} />} />
             <Route path="/pratiche" element={<Pratiche />} />
             <Route path="/vista-sub" element={<VistaSub />} />
             <Route path="/sub" element={<SubSquadre />} />

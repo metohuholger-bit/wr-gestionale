@@ -278,16 +278,9 @@ async def public_view(token: str):
         raise HTTPException(status_code=404, detail="Link non trovato")
     if not SHEET_CSV_URL:
         return {"squadra": sq["nome"], "wr": []}
-    async with httpx.AsyncClient() as c:
-        r = await c.get(SHEET_CSV_URL, follow_redirects=True)
-    lines = r.text.strip().split("\n")
-    headers = [h.strip() for h in lines[0].split(",")]
-    rows = []
-    for line in lines[1:]:
-        vals = line.split(",")
-        row = {headers[i]: vals[i].strip() if i < len(vals) else "" for i in range(len(headers))}
-        if str(row.get("WR", "")).strip() in [str(x).strip() for x in sq.get("wr_list", [])]:
-            rows.append(row)
+    all_rows = await get_sheet_data()
+    wr_list_str = [str(x).strip() for x in sq.get("wr_list", [])]
+    rows = [r for r in all_rows if str(r.get("WR", "")).strip() in wr_list_str]
     return {"squadra": sq["nome"], "sub_code": sq["sub_code"], "wr": rows}
 
 # ── ADMIN: gestione utenti ──

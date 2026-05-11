@@ -133,7 +133,7 @@ export default function SubSquadre() {
                   const sqWrs = sq.wr_list?.map(wrNum => wrs.find(w => String(w.WR) === String(wrNum))).filter(Boolean) || [];
                   const isExpSq = expandedSq[sq.link_token];
                   const sqOld = sqWrs.filter(w => isOld(w?.Datadispaccio)).length;
-                  const link = `${window.location.origin}/view/${sq.link_token}`;
+                  const link = `${window.location.origin}/#/view/${sq.link_token}`;
 
                   return (
                     <div key={sq.link_token} style={{ marginBottom: 8, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>

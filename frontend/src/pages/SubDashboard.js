@@ -148,7 +148,7 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
       const r = await axios.post(`${API}/mini-squadre`, {
         nome: nomeSquadra, sub_code: subCode, wr_list: [...selected]
       });
-      const link = `${window.location.origin}/view/${r.data.token}`;
+      const link = `${window.location.origin}/#/view/${r.data.token}`;
       navigator.clipboard.writeText(link);
       setSaved(true);
       onSquadraCreata({ nome: nomeSquadra, sub_code: subCode, wr_list: [...selected], link_token: r.data.token });
@@ -515,7 +515,7 @@ export default function SubDashboard({ previewMode }) {
                     <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--border)' }}>
                       <span style={{ fontSize: 14, fontWeight: 500 }}>{sq.nome}</span>
                       <span style={{ fontSize: 12, color: 'var(--muted)' }}>{sqWrs.length} WR</span>
-                      <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/view/${sq.link_token}`)}
+                      <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/#/view/${sq.link_token}`)}
                         style={{ marginLeft: 'auto', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--accent)', padding: '5px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
                         ⎘ Copia link
                       </button>

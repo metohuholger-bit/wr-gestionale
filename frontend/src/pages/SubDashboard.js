@@ -335,6 +335,7 @@ export default function SubDashboard({ previewMode }) {
   const [showMappa, setShowMappa] = useState(false);
   const [activeTab, setActiveTab] = useState('pratiche');
   const [selectedWR, setSelectedWR] = useState(null);
+  const [solleciti, setSolleciti] = useState([]);
   const [search, setSearch] = useState('');
   const [filtroStato, setFiltroStato] = useState('');
   const [filtroCentrale, setFiltroCentrale] = useState('');
@@ -360,10 +361,11 @@ export default function SubDashboard({ previewMode }) {
         .finally(() => setLoading(false));
       return;
     }
-    Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/mini-squadre`)])
-      .then(([wrR, sqR]) => {
+    Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/mini-squadre`), axios.get(`${API}/solleciti`)])
+      .then(([wrR, sqR, solR]) => {
         setWr(wrR.data.filter(w => !STATI_ESCLUSI.includes(w.StatoWR?.toUpperCase())));
         setMiniSquadre(sqR.data);
+        setSolleciti(solR.data);
       }).catch(() => {}).finally(() => setLoading(false));
   }, [API, previewMode]);
 
@@ -487,6 +489,22 @@ export default function SubDashboard({ previewMode }) {
             </div>
           );
         })()}
+        {/* Banner solleciti */}
+        {solleciti.length > 0 && (
+          <div style={{ background:'rgba(236,72,153,0.08)', border:'1px solid rgba(236,72,153,0.3)', borderRadius:8, padding:'10px 14px', marginBottom:10 }}>
+            <div style={{ fontFamily:'monospace', fontSize:9, letterSpacing:3, color:'#ec4899', marginBottom:6, fontWeight:700 }}>⚡ PRATICHE SOLLECITATE DA MDS ({solleciti.length})</div>
+            {solleciti.map((s, i) => {
+              const w = wr.find(r => String(r.WR) === String(s.wr));
+              return (
+                <div key={i} onClick={() => w && setSelectedWR(w)} style={{ display:'flex', gap:10, alignItems:'center', padding:'5px 0', borderBottom: i < solleciti.length-1 ? '1px solid rgba(236,72,153,0.15)' : 'none', cursor: w ? 'pointer' : 'default' }}>
+                  <span style={{ fontFamily:'monospace', fontSize:12, color:'#ec4899', fontWeight:700 }}>WR {s.wr}</span>
+                  {w && <span style={{ fontSize:11, color:'#64748b' }}>{w.Indirizzo}, {w.Localita}</span>}
+                  {s.messaggio && <span style={{ fontSize:11, color:'#f59e0b', marginLeft:'auto', fontStyle:'italic' }}>"{s.messaggio}"</span>}
+                </div>
+              );
+            })}
+          </div>
+        )}
         {/* Card statistiche */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
           {[
@@ -589,15 +607,16 @@ export default function SubDashboard({ previewMode }) {
                     {paginated.map((w, i) => {
                       const old = isOld(w.Datadispaccio);
                       const isSel = selectedRows.has(String(w.WR));
+                      const isSollecitata = solleciti.some(s => String(s.wr) === String(w.WR));
                       return (
                         <tr key={i}
-                          style={{ borderBottom: '1px solid var(--border)', background: isSel ? 'rgba(245,158,11,0.08)' : old ? 'rgba(239,68,68,0.04)' : 'transparent', cursor: 'pointer' }}
+                          style={{ borderBottom: '1px solid var(--border)', background: isSel ? 'rgba(245,158,11,0.08)' : isSollecitata ? 'rgba(236,72,153,0.06)' : old ? 'rgba(239,68,68,0.04)' : 'transparent', cursor: 'pointer', borderLeft: isSollecitata ? '3px solid #ec4899' : '' }}
                           onMouseEnter={e => e.currentTarget.style.background = isSel ? 'rgba(245,158,11,0.15)' : old ? 'rgba(239,68,68,0.1)' : 'rgba(59,130,246,0.06)'}
                           onMouseLeave={e => e.currentTarget.style.background = isSel ? 'rgba(245,158,11,0.08)' : old ? 'rgba(239,68,68,0.04)' : 'transparent'}>
                           <td style={{ padding: '7px 8px' }} onClick={e => { e.stopPropagation(); toggleRowSelect(String(w.WR)); }}>
                             <input type="checkbox" checked={isSel} onChange={() => {}} />
                           </td>
-                          <td style={{ padding: '7px 12px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)' }} onClick={() => setSelectedWR(w)}>{w.WR}</td>
+                          <td style={{ padding: '7px 12px', fontFamily: 'var(--mono)', fontSize: 11, color: isSollecitata ? '#ec4899' : 'var(--accent)' }} onClick={() => setSelectedWR(w)}>{w.WR} {isSollecitata && <span style={{ fontSize:9 }}>⚡</span>}</td>
                           <td style={{ padding: '7px 12px', color: old ? 'var(--red)' : 'var(--green)', fontSize: 11 }} onClick={() => setSelectedWR(w)}>{w.StatoWR}</td>
                           <td style={{ padding: '7px 12px', color: 'var(--muted)', whiteSpace: 'nowrap' }} onClick={() => setSelectedWR(w)}>{w.Datadispaccio}</td>
                           <td style={{ padding: '7px 12px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }} onClick={() => setSelectedWR(w)}>{w.Centrale || '—'}</td>

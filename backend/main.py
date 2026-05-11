@@ -270,6 +270,39 @@ async def delete_mini_squadra(token: str, user=Depends(get_current_user)):
     await db.mini_squadre.delete_one({"link_token": token})
     return {"ok": True}
 
+
+# ── SOLLECITI ──
+class Sollecito(BaseModel):
+    wr: str
+    sub_code: str
+    messaggio: Optional[str] = ""
+
+@app.get("/solleciti")
+async def get_solleciti(user=Depends(get_current_user)):
+    if user["role"] == "sub":
+        cursor = db.solleciti.find({"sub_code": user["sub_code"]}, {"_id": 0})
+    else:
+        cursor = db.solleciti.find({}, {"_id": 0})
+    return await cursor.to_list(length=200)
+
+@app.post("/solleciti")
+async def crea_sollecito(s: Sollecito, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    await db.solleciti.update_one(
+        {"wr": s.wr, "sub_code": s.sub_code},
+        {"$set": {"wr": s.wr, "sub_code": s.sub_code, "messaggio": s.messaggio, "data": datetime.utcnow(), "da": user["email"]}},
+        upsert=True
+    )
+    return {"ok": True}
+
+@app.delete("/solleciti/{wr}")
+async def elimina_sollecito(wr: str, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    await db.solleciti.delete_one({"wr": wr})
+    return {"ok": True}
+
 # ── VIEW PUBBLICA (no auth) ──
 @app.get("/view/{token}")
 async def public_view(token: str):

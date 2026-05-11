@@ -161,6 +161,56 @@ function Donut({ segments, size = 80 }) {
   );
 }
 
+
+// ── SOLLECITA POPUP ──
+function SollecitaPopup({ wr, subCode, API, onClose, onSollecitato }) {
+  const [messaggio, setMessaggio] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+
+  const salva = async () => {
+    setSaving(true);
+    try {
+      await axios.post(`${API}/solleciti`, { wr: String(wr.WR), sub_code: subCode || wr.Sq, messaggio });
+      onSollecitato(String(wr.WR));
+      onClose();
+    } catch(e) { console.error(e); }
+    setSaving(false);
+  };
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:'#111827', border:'1px solid rgba(236,72,153,0.3)', borderRadius:12, width:420, overflow:'hidden', boxShadow:'0 0 40px rgba(236,72,153,0.15)' }}>
+        <div style={{ padding:'16px 20px', borderBottom:'1px solid #1e2330', display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{ fontSize:18 }}>⚡</span>
+          <div>
+            <div style={{ fontFamily:'monospace', fontSize:10, color:'#475569', letterSpacing:2 }}>SOLLECITA PRATICA</div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#ec4899' }}>WR {wr.WR}</div>
+          </div>
+          <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', color:'#475569', fontSize:20, cursor:'pointer' }}>×</button>
+        </div>
+        <div style={{ padding:'16px 20px' }}>
+          <div style={{ fontSize:12, color:'#64748b', marginBottom:4 }}>{wr.Indirizzo}, {wr.Localita}</div>
+          <div style={{ fontSize:11, color:'#475569', marginBottom:16 }}>Squadra: <span style={{ color:'#ec4899', fontFamily:'monospace' }}>{subCode || wr.Sq}</span></div>
+          <textarea
+            value={messaggio}
+            onChange={e => setMessaggio(e.target.value)}
+            placeholder="Messaggio per il sub (opzionale)... es. 'Completare entro venerdì'"
+            rows={3}
+            style={{ width:'100%', background:'#0a0d14', border:'1px solid #1e2330', color:'#e2e8f0', padding:'8px 10px', borderRadius:6, fontSize:12, outline:'none', resize:'vertical', fontFamily:'sans-serif', boxSizing:'border-box' }}
+          />
+        </div>
+        <div style={{ padding:'12px 20px', borderTop:'1px solid #1e2330', display:'flex', gap:10 }}>
+          <button onClick={salva} disabled={saving}
+            style={{ flex:1, background:'rgba(236,72,153,0.15)', border:'1px solid rgba(236,72,153,0.3)', color:'#ec4899', padding:'10px', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer' }}>
+            {saving ? '...' : '⚡ Invia sollecito'}
+          </button>
+          <button onClick={onClose} style={{ background:'transparent', border:'1px solid #1e2330', color:'#475569', padding:'10px 16px', borderRadius:8, fontSize:13, cursor:'pointer' }}>Annulla</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── MAIN DASHBOARD ──
 function DashboardHome({ onSelectSquadra }) {
   const { API } = useAuth();
@@ -170,10 +220,12 @@ function DashboardHome({ onSelectSquadra }) {
   const [selectedPanel, setSelectedPanel] = useState(null);
   const [openPopup, setOpenPopup] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [solleciti, setSolleciti] = useState([]);
+  const [sollecitaWR, setSollecitaWR] = useState(null);
 
   useEffect(() => {
-    Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/mini-squadre`)])
-      .then(([w, s]) => { setWr(w.data); setMiniSquadre(s.data); })
+    Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/mini-squadre`), axios.get(`${API}/solleciti`)])
+      .then(([w, s, sol]) => { setWr(w.data); setMiniSquadre(s.data); setSolleciti(sol.data); })
       .catch(() => {}).finally(() => setLoading(false));
   }, [API]);
 
@@ -243,6 +295,7 @@ function DashboardHome({ onSelectSquadra }) {
       `}</style>
 
       <AlertBanner wr={selectedSub ? filtered : wr} />
+      {sollecitaWR && <SollecitaPopup wr={sollecitaWR} subCode={selectedSub} API={API} onClose={() => setSollecitaWR(null)} onSollecitato={wrNum => setSolleciti(prev => [...prev.filter(s => s.wr !== wrNum), { wr: wrNum, sub_code: sollecitaWR.Sq }])} />}
       {openPopup && (
         <StatPopup
           title={openPopup.label}
@@ -505,12 +558,13 @@ function PannelloWR({ squadra, wr, onClose }) {
                   <span style={{ fontSize:9, padding:'2px 5px', borderRadius:3, background: old ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.1)', color: old ? '#ef4444' : '#22c55e' }}>{old ? '+90gg' : w.StatoWR}</span>
                 </div>
                 <div style={{ fontSize:11, color:'#64748b', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{w.Indirizzo}, {w.Localita}</div>
-                <div style={{ display:'flex', gap:10, marginTop:3, fontSize:10, color:'#475569' }}>
+                <div style={{ display:'flex', gap:10, marginTop:3, fontSize:10, color:'#475569', alignItems:'center' }}>
                   <span>{w.Datadispaccio}</span>
                   {w.Pali && <span>Pali: {w.Pali}</span>}
                   {(parseFloat(w.Latitudine) || parseFloat(w.LatInferita)) && (
                     <a href={`https://www.google.com/maps/dir/?api=1&destination=${w.Latitudine||w.LatInferita},${w.Longitudine||w.LonInferita}`} target="_blank" rel="noreferrer" style={{ color:'#22c55e' }}>📍</a>
                   )}
+                  <button onClick={() => setSollecitaWR(w)} style={{ marginLeft:'auto', background:'rgba(236,72,153,0.1)', border:'1px solid rgba(236,72,153,0.2)', color:'#ec4899', padding:'2px 8px', borderRadius:4, fontSize:10, cursor:'pointer' }}>⚡ Sollecita</button>
                 </div>
               </div>
             );

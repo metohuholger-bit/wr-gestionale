@@ -16,6 +16,51 @@ const COLONNE = [
   { key: 'Note', label: 'Note' },
 ];
 
+
+function SollecitaPraticaPopup({ wr, API, onClose, onSollecitato }) {
+  const [messaggio, setMessaggio] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+
+  const salva = async () => {
+    setSaving(true);
+    try {
+      await axios.post(`${API}/solleciti`, { wr: String(wr.WR), sub_code: wr.Sq, messaggio });
+      onSollecitato(String(wr.WR));
+      onClose();
+    } catch(e) { console.error(e); }
+    setSaving(false);
+  };
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:'var(--panel)', border:'1px solid rgba(236,72,153,0.3)', borderRadius:12, width:420, overflow:'hidden' }}>
+        <div style={{ padding:'16px 20px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{ fontSize:18 }}>⚡</span>
+          <div>
+            <div style={{ fontSize:10, color:'var(--muted)', fontFamily:'var(--mono)', letterSpacing:2 }}>SOLLECITA PRATICA</div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#ec4899' }}>WR {wr.WR} — {wr.Sq}</div>
+          </div>
+          <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', color:'var(--muted)', fontSize:20, cursor:'pointer' }}>×</button>
+        </div>
+        <div style={{ padding:'16px 20px' }}>
+          <div style={{ fontSize:12, color:'var(--muted)', marginBottom:12 }}>{wr.Indirizzo}, {wr.Localita}</div>
+          <textarea value={messaggio} onChange={e => setMessaggio(e.target.value)}
+            placeholder="Messaggio per il sub (opzionale)..."
+            rows={3}
+            style={{ width:'100%', background:'var(--bg)', border:'1px solid var(--border)', color:'var(--text)', padding:'8px 10px', borderRadius:6, fontSize:12, outline:'none', resize:'vertical', boxSizing:'border-box' }} />
+        </div>
+        <div style={{ padding:'12px 20px', borderTop:'1px solid var(--border)', display:'flex', gap:10 }}>
+          <button onClick={salva} disabled={saving}
+            style={{ flex:1, background:'rgba(236,72,153,0.15)', border:'1px solid rgba(236,72,153,0.3)', color:'#ec4899', padding:'10px', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer' }}>
+            {saving ? '...' : '⚡ Invia sollecito'}
+          </button>
+          <button onClick={onClose} style={{ background:'transparent', border:'1px solid var(--border)', color:'var(--muted)', padding:'10px 16px', borderRadius:8, fontSize:13, cursor:'pointer' }}>Annulla</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PopupWR({ w, onClose }) {
   const lat = parseFloat(w.Latitudine);
   const lon = parseFloat(w.Longitudine);
@@ -73,6 +118,8 @@ export default function Pratiche() {
   const { API } = useAuth();
   const [wr, setWr] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [solleciti, setSolleciti] = useState([]);
+  const [sollecitaWR, setSollecitaWR] = useState(null);
   const [search, setSearch] = useState('');
   const [filtroSq, setFiltroSq] = useState('');
   const [filtroStato, setFiltroStato] = useState('');
@@ -85,8 +132,8 @@ export default function Pratiche() {
   const PER_PAGE = 100;
 
   useEffect(() => {
-    axios.get(`${API}/wr`)
-      .then(r => setWr(r.data))
+    Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/solleciti`)])
+      .then(([wrR, solR]) => { setWr(wrR.data); setSolleciti(solR.data); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [API]);
@@ -155,6 +202,7 @@ export default function Pratiche() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 48px)', overflow: 'hidden' }}>
       {selected && <PopupWR w={selected} onClose={() => setSelected(null)} />}
+      {sollecitaWR && <SollecitaPraticaPopup wr={sollecitaWR} API={API} onClose={() => setSollecitaWR(null)} onSollecitato={wrNum => setSolleciti(prev => [...prev.filter(s => s.wr !== wrNum), { wr: wrNum, sub_code: sollecitaWR.Sq }])} />}
 
       {/* Toolbar */}
       <div style={{ padding: '12px 20px', background: 'var(--panel)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
@@ -196,6 +244,7 @@ export default function Pratiche() {
                   {col.label} {sortCol === col.key ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </th>
               ))}
+              <th style={{ padding: '9px 8px', borderBottom: '1px solid var(--border)', fontSize:11, color:'#ec4899' }}>⚡</th>
             </tr>
           </thead>
           <tbody>
@@ -210,14 +259,20 @@ export default function Pratiche() {
                   {COLONNE.map(col => (
                     <td key={col.key} style={{
                       padding: '7px 12px',
-                      color: col.mono ? 'var(--accent)' : col.key === 'StatoWR' ? (old ? 'var(--red)' : 'var(--green)') : 'var(--text)',
+                      color: col.mono ? (solleciti.some(s => s.wr === String(w.WR)) ? '#ec4899' : 'var(--accent)') : col.key === 'StatoWR' ? (old ? 'var(--red)' : 'var(--green)') : 'var(--text)',
                       fontFamily: col.mono ? 'var(--mono)' : 'inherit',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       maxWidth: col.key === 'Note' || col.key === 'JobType' ? 180 : col.key === 'Indirizzo' ? 200 : 'none'
                     }}>
-                      {w[col.key] || '—'}
+                      {w[col.key] || '—'}{col.key === 'WR' && solleciti.some(s => s.wr === String(w.WR)) && <span style={{ marginLeft:4, fontSize:9 }}>⚡</span>}
                     </td>
                   ))}
+                  <td style={{ padding:'4px 8px' }}>
+                    <button onClick={e => { e.stopPropagation(); setSollecitaWR(w); }}
+                      style={{ background: solleciti.some(s => s.wr === String(w.WR)) ? 'rgba(236,72,153,0.2)' : 'transparent', border:'1px solid rgba(236,72,153,0.2)', color:'#ec4899', padding:'3px 7px', borderRadius:4, fontSize:10, cursor:'pointer', whiteSpace:'nowrap' }}>
+                      ⚡
+                    </button>
+                  </td>
                 </tr>
               );
             })}

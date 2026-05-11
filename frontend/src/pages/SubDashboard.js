@@ -369,6 +369,15 @@ export default function SubDashboard({ previewMode }) {
       }).catch(() => {}).finally(() => setLoading(false));
   }, [API, previewMode]);
 
+  // Ricarica solleciti ogni 2 minuti
+  useEffect(() => {
+    if (previewMode) return;
+    const interval = setInterval(() => {
+      axios.get(`${API}/solleciti`).then(r => setSolleciti(r.data)).catch(() => {});
+    }, 120000);
+    return () => clearInterval(interval);
+  }, [API, previewMode]);
+
   const oggi = new Date();
   const daysDiff = (d) => {
     if (!d) return null;

@@ -368,6 +368,15 @@ export default function SubDashboard({ previewMode }) {
   }, [API, previewMode]);
 
   const oggi = new Date();
+  const daysDiff = (d) => {
+    if (!d) return null;
+    let date;
+    if (d.includes('-') && d.indexOf('-') === 4) date = new Date(d);
+    else if (d.includes('/')) { const p = d.split('/'); date = new Date(p[2], p[1]-1, p[0]); }
+    else return null;
+    return (new Date() - date) / (1000*60*60*24);
+  };
+
   const isOld = (d) => {
     if (!d) return false;
     let date;
@@ -463,22 +472,39 @@ export default function SubDashboard({ previewMode }) {
         </div>
       </div>
 
-      {/* Stats */}
-      <div style={{ padding: '14px 20px', display: 'flex', gap: 12, flexShrink: 0, alignItems: 'stretch' }}>
-        {[
-          { label: 'WR totali', val: wr.length, color: 'var(--accent)' },
-          { label: 'Oltre 90gg', val: oltre90, color: oltre90 > 0 ? 'var(--red)' : 'var(--muted)' },
-          { label: 'Mini-squadre', val: miniSquadre.length, color: 'var(--accent2)' },
-          { label: 'Con coordinate', val: conCoord, color: 'var(--green)' },
-        ].map((s, i) => (
-          <div key={i} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', flex: 1 }}>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>{s.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 500, color: s.color }}>{s.val}</div>
-          </div>
-        ))}
-        <button onClick={() => setShowMappa(true)} style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', color: 'var(--green)', padding: '12px 20px', borderRadius: 10, fontSize: 13, cursor: 'pointer', fontWeight: 500, lineHeight: 1.6 }}>
-          ◎ Apri Mappa<br/><span style={{ fontSize: 10, fontWeight: 400, color: 'var(--muted)' }}>Seleziona WR per squadra</span>
-        </button>
+      {/* Stats + Alert urgenze */}
+      <div style={{ padding: '12px 20px', flexShrink: 0 }}>
+        {/* Alert urgenze */}
+        {(() => {
+          const urgenti = wr.filter(w => (w.Note||'').match(/670050|670100/));
+          const avvicin = wr.filter(w => { const d = daysDiff(w.Datadispaccio); return d !== null && d > 60 && d <= 90; });
+          if (urgenti.length === 0 && oltre90 === 0) return null;
+          return (
+            <div style={{ background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.25)', borderRadius:8, padding:'10px 14px', marginBottom:10, fontSize:12 }}>
+              {urgenti.length > 0 && <div style={{ color:'#ec4899', fontWeight:600, marginBottom:2 }}>⚡ {urgenti.length} WR URGENTI (670050/670100) — da lavorare con priorità</div>}
+              {oltre90 > 0 && <div style={{ color:'#ef4444' }}>⚠ {oltre90} WR oltre 90 giorni — verificare stato avanzamento</div>}
+              {avvicin.length > 0 && <div style={{ color:'#f59e0b', marginTop:2 }}>◔ {avvicin.length} WR in avvicinamento (60-90gg) — pianificare intervento</div>}
+            </div>
+          );
+        })()}
+        {/* Card statistiche */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
+          {[
+            { label: 'WR TOTALI', val: wr.length, color: '#3b82f6', bg:'rgba(59,130,246,0.08)', border:'rgba(59,130,246,0.2)' },
+            { label: 'OLTRE 90GG', val: oltre90, color: oltre90 > 0 ? '#ef4444' : '#475569', bg: oltre90 > 0 ? 'rgba(239,68,68,0.08)' : 'rgba(100,116,139,0.05)', border: oltre90 > 0 ? 'rgba(239,68,68,0.2)' : 'rgba(100,116,139,0.1)' },
+            { label: '60-90GG', val: (() => { const a = wr.filter(w => { const d = daysDiff(w.Datadispaccio); return d !== null && d > 60 && d <= 90; }).length; return a; })(), color: '#f59e0b', bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.2)' },
+            { label: 'URGENTI', val: wr.filter(w => (w.Note||'').match(/670050|670100/)).length, color: '#ec4899', bg:'rgba(236,72,153,0.08)', border:'rgba(236,72,153,0.2)' },
+            { label: 'MINI-SQUADRE', val: miniSquadre.length, color: '#f59e0b', bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.2)' },
+          ].map((s, i) => (
+            <div key={i} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 8, padding: '10px 14px', flex: 1 }}>
+              <div style={{ fontSize: 9, fontFamily:'monospace', letterSpacing:2, color: s.color, marginBottom: 6, fontWeight:600 }}>{s.label}</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.val}</div>
+            </div>
+          ))}
+          <button onClick={() => setShowMappa(true)} style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', color: '#22c55e', padding: '10px 16px', borderRadius: 8, fontSize: 12, cursor: 'pointer', fontWeight: 600, lineHeight: 1.6, flexShrink:0 }}>
+            ◎ Apri Mappa<br/><span style={{ fontSize: 10, fontWeight: 400, color: '#475569' }}>Seleziona WR</span>
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}

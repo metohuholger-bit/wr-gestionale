@@ -58,6 +58,7 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
   const [filtroComune, setFiltroComune] = useState('');
   const [filtroSquadra, setFiltroSquadra] = useState(null); // null = tutte
   const [filtroMiniSquadra, setFiltroMiniSquadra] = useState('');
+  const [filtroMappaExtra, setFiltroMappaExtra] = useState(null); // null | 'urgenti' | 'sollecitati' | 'avvicin'
 
   const COLORI = ['#f59e0b', '#22c55e', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#06b6d4', '#a855f7'];
 
@@ -129,9 +130,12 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
         const sq = wrToSquadra[wrNum];
         if (!sq || sq.token !== filtroMiniSquadra) visible = false;
       }
+      if (filtroMappaExtra === 'urgenti' && !(w.Note||'').match(/670050|670100/)) visible = false;
+      if (filtroMappaExtra === 'sollecitati' && !solleciti?.some(s => String(s.wr) === String(w.WR))) visible = false;
+      if (filtroMappaExtra === 'avvicin') { const d2 = (oggi2 - new Date(w.Datadispaccio)) / (1000*60*60*24); if (isNaN(d2) || d2 <= 60 || d2 > 90) visible = false; }
       marker.setStyle({ opacity: visible ? 1 : 0.05, fillOpacity: visible ? 0.9 : 0.05 });
     });
-  }, [filtroSquadra, filtroCentrale, filtroComune, filtroMiniSquadra]);
+  }, [filtroSquadra, filtroCentrale, filtroComune, filtroMiniSquadra, filtroMappaExtra, solleciti]);
 
   const cercaSuMappa = (w) => {
     const lat = parseFloat(w.Latitudine);
@@ -235,6 +239,19 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
           </span>
           {selected.size > 0 && <span style={{ fontSize: 12, color: 'var(--accent2)' }}>● {selected.size} selezionate</span>}
 
+          {/* Filtri extra */}
+          <div style={{ display:'flex', gap:4 }}>
+            {[
+              { key:'urgenti', label:'⚡ Urgenti', color:'#ec4899' },
+              { key:'sollecitati', label:'⚡ Sollecitati', color:'#ec4899' },
+              { key:'avvicin', label:'◔ 60-90gg', color:'#f59e0b' },
+            ].map(f => (
+              <button key={f.key} onClick={() => setFiltroMappaExtra(filtroMappaExtra === f.key ? null : f.key)}
+                style={{ padding:'3px 8px', borderRadius:4, border:`1px solid ${filtroMappaExtra === f.key ? f.color : 'var(--border)'}`, background: filtroMappaExtra === f.key ? `${f.color}22` : 'transparent', color: filtroMappaExtra === f.key ? f.color : 'var(--muted)', fontSize:10, cursor:'pointer' }}>
+                {f.label}
+              </button>
+            ))}
+          </div>
           {/* Legenda mini-squadre */}
           {miniSquadre.length > 0 && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginLeft: 8 }}>
@@ -544,7 +561,7 @@ export default function SubDashboard({ previewMode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
       {showSolleciti && <SollicitiPopup solleciti={solleciti} wr={wr} onClose={() => setShowSolleciti(false)} onSelectWR={w => { setSelectedWR(w); setActiveTab('pratiche'); }} />}
-      {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} subCode={subCode} miniSquadre={miniSquadre} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} />}
+      {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} subCode={subCode} miniSquadre={miniSquadre} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} solleciti={solleciti} />}
       {selectedWR && <PopupWR w={selectedWR} onClose={() => setSelectedWR(null)} />}
 
       {/* Topbar */}
@@ -581,6 +598,7 @@ export default function SubDashboard({ previewMode }) {
             { label: 'OLTRE 90GG', val: oltre90, color: oltre90 > 0 ? '#ef4444' : '#475569', bg: oltre90 > 0 ? 'rgba(239,68,68,0.08)' : 'rgba(100,116,139,0.05)', border: oltre90 > 0 ? 'rgba(239,68,68,0.2)' : 'rgba(100,116,139,0.1)', key: 'over90' },
             { label: '60-90GG', val: wr.filter(w => { const d = daysDiff(w.Datadispaccio); return d !== null && d > 60 && d <= 90; }).length, color: '#f59e0b', bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.2)', key: 'avvicin' },
             { label: 'URGENTI', val: wr.filter(w => (w.Note||'').match(/670050|670100/)).length, color: '#ec4899', bg:'rgba(236,72,153,0.08)', border:'rgba(236,72,153,0.2)', key: 'urgenti' },
+            { label: 'SOLLECITATI', val: solleciti.length, color: '#ec4899', bg:'rgba(236,72,153,0.08)', border:'rgba(236,72,153,0.2)', key: 'sollecitati' },
             { label: 'MINI-SQUADRE', val: miniSquadre.length, color: '#f59e0b', bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.2)', key: null },
           ].map((s, i) => (
             <div key={i} onClick={() => { if(s.key) { setFiltroCard(filtroCard === s.key ? null : s.key); setActiveTab('pratiche'); setPage(1); } }}
@@ -625,12 +643,10 @@ export default function SubDashboard({ previewMode }) {
                 ⚠ +90gg
               </button>
               <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:10 }}>
-                <button onClick={() => { setShowSolleciti(true); }} 
-                  onDoubleClick={() => { setFiltroCard(filtroCard === 'sollecitati' ? null : 'sollecitati'); setPage(1); }}
-                  title="Click: apri popup | Doppio click: filtra tabella"
-                  style={{ position:'relative', background: filtroCard === 'sollecitati' ? 'rgba(236,72,153,0.2)' : solleciti.length > 0 ? 'rgba(236,72,153,0.1)' : 'transparent', border:`2px solid ${filtroCard === 'sollecitati' ? '#ec4899' : solleciti.length > 0 ? 'rgba(236,72,153,0.3)' : 'var(--border)'}`, color: solleciti.length > 0 ? '#ec4899' : 'var(--muted)', padding:'5px 10px', borderRadius:6, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
-                  ⚡
-                  {solleciti.length > 0 && <span style={{ fontSize:11, fontWeight:700 }}>{solleciti.length}</span>}
+                <button onClick={() => setShowSolleciti(true)}
+                  title="Apri solleciti"
+                  style={{ background: solleciti.length > 0 ? 'rgba(236,72,153,0.1)' : 'transparent', border:`1px solid ${solleciti.length > 0 ? 'rgba(236,72,153,0.3)' : 'var(--border)'}`, color: solleciti.length > 0 ? '#ec4899' : 'var(--muted)', padding:'5px 10px', borderRadius:6, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
+                  ⚡ {solleciti.length > 0 && <span style={{ fontSize:11, fontWeight:700 }}>{solleciti.length}</span>}
                 </button>
                 <span style={{ fontSize: 12, color: 'var(--muted)' }}><span style={{ color: 'var(--accent)', fontWeight: 600 }}>{filtered.length}</span> / {wr.length} WR</span>
               </div>

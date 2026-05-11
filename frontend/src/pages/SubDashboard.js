@@ -478,7 +478,7 @@ function StoricoSolleciti({ wr, solleciti, setSolleciti, API, onClose }) {
   const eliminaSingolo = async (idx) => {
     try {
       const nuovoStorico = storico.filter((_, i) => i !== idx);
-      await axios.post(`${API}/solleciti/${wr.WR}/storico`, nuovoStorico);
+      await axios.post(`${API}/solleciti/${wr.WR}/storico`, { storico: nuovoStorico });
       setSolleciti(prev => prev.map(s => String(s.wr) === String(wr.WR) ? { ...s, storico: nuovoStorico } : s));
       if (nuovoStorico.length === 0) onClose();
     } catch(e) { console.error(e); }

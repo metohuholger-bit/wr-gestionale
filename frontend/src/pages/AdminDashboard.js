@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import Pratiche from './Pratiche';
 import SubSquadre from './SubSquadre';
 import SubDashboard from './SubDashboard';
+import Utenti from './Utenti';
 
 function VistaSub() {
   const { API, user } = useAuth();
@@ -358,7 +359,7 @@ export default function AdminDashboard() {
         <Route path="/pratiche" element={<Pratiche />} />
         <Route path="/sub" element={<SubSquadre />} />
         <Route path="/link" element={<div style={{ padding: 24, color: 'var(--muted)' }}>Link attivi — in sviluppo</div>} />
-        <Route path="/utenti" element={<div style={{ padding: 24, color: 'var(--muted)' }}>Gestione utenti — in sviluppo</div>} />
+        <Route path="/utenti" element={<Utenti />} />
       </Routes>
     </Layout>
   );

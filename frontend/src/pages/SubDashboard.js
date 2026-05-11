@@ -473,6 +473,7 @@ export default function SubDashboard({ previewMode }) {
   const tipi = [...new Set(wr.map(w => w.JobType).filter(Boolean))].sort();
 
   const filtered = wr.filter(w => {
+    if (filtroCard === 'sollecitati' && !solleciti.some(s => String(s.wr) === String(w.WR))) return false;
     if (filtroCard === 'over90' && (daysDiff(w.Datadispaccio)||0) <= 90) return false;
     if (filtroCard === 'avvicin') { const d = daysDiff(w.Datadispaccio); if (d === null || d <= 60 || d > 90) return false; }
     if (filtroCard === 'urgenti' && !(w.Note||'').match(/670050|670100/)) return false;
@@ -576,15 +577,15 @@ export default function SubDashboard({ previewMode }) {
         {/* Card statistiche */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
           {[
-            { label: 'WR TOTALI', val: wr.length, color: '#3b82f6', bg:'rgba(59,130,246,0.08)', border:'rgba(59,130,246,0.2)', key: null },
+            { label: 'WR TOTALI', val: wr.length, color: '#3b82f6', bg:'rgba(59,130,246,0.08)', border:'rgba(59,130,246,0.2)', key: 'reset' },
             { label: 'OLTRE 90GG', val: oltre90, color: oltre90 > 0 ? '#ef4444' : '#475569', bg: oltre90 > 0 ? 'rgba(239,68,68,0.08)' : 'rgba(100,116,139,0.05)', border: oltre90 > 0 ? 'rgba(239,68,68,0.2)' : 'rgba(100,116,139,0.1)', key: 'over90' },
             { label: '60-90GG', val: wr.filter(w => { const d = daysDiff(w.Datadispaccio); return d !== null && d > 60 && d <= 90; }).length, color: '#f59e0b', bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.2)', key: 'avvicin' },
             { label: 'URGENTI', val: wr.filter(w => (w.Note||'').match(/670050|670100/)).length, color: '#ec4899', bg:'rgba(236,72,153,0.08)', border:'rgba(236,72,153,0.2)', key: 'urgenti' },
             { label: 'MINI-SQUADRE', val: miniSquadre.length, color: '#f59e0b', bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.2)', key: null },
           ].map((s, i) => (
             <div key={i} onClick={() => { if(s.key) { setFiltroCard(filtroCard === s.key ? null : s.key); setActiveTab('pratiche'); setPage(1); } }}
-              style={{ background: s.bg, border: `2px solid ${filtroCard === s.key ? s.color : s.border}`, borderRadius: 8, padding: '10px 14px', flex: 1, cursor: s.key ? 'pointer' : 'default', transition:'border 0.2s' }}>
-              <div style={{ fontSize: 9, fontFamily:'monospace', letterSpacing:2, color: s.color, marginBottom: 6, fontWeight:600 }}>{s.label}{filtroCard === s.key ? ' ✓' : ''}</div>
+              style={{ background: s.bg, border: `2px solid ${filtroCard === s.key && s.key !== 'reset' ? s.color : s.border}`, borderRadius: 8, padding: '10px 14px', flex: 1, cursor: s.key ? 'pointer' : 'default', transition:'border 0.2s' }}>
+              <div style={{ fontSize: 9, fontFamily:'monospace', letterSpacing:2, color: s.color, marginBottom: 6, fontWeight:600 }}>{s.label}{filtroCard === s.key && s.key !== 'reset' ? ' ✓' : ''}</div>
               <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.val}</div>
             </div>
           ))}
@@ -624,7 +625,10 @@ export default function SubDashboard({ previewMode }) {
                 ⚠ +90gg
               </button>
               <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:10 }}>
-                <button onClick={() => setShowSolleciti(true)} title="Pratiche sollecitate" style={{ position:'relative', background: solleciti.length > 0 ? 'rgba(236,72,153,0.1)' : 'transparent', border:`1px solid ${solleciti.length > 0 ? 'rgba(236,72,153,0.3)' : 'var(--border)'}`, color: solleciti.length > 0 ? '#ec4899' : 'var(--muted)', padding:'5px 10px', borderRadius:6, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
+                <button onClick={() => { setShowSolleciti(true); }} 
+                  onDoubleClick={() => { setFiltroCard(filtroCard === 'sollecitati' ? null : 'sollecitati'); setPage(1); }}
+                  title="Click: apri popup | Doppio click: filtra tabella"
+                  style={{ position:'relative', background: filtroCard === 'sollecitati' ? 'rgba(236,72,153,0.2)' : solleciti.length > 0 ? 'rgba(236,72,153,0.1)' : 'transparent', border:`2px solid ${filtroCard === 'sollecitati' ? '#ec4899' : solleciti.length > 0 ? 'rgba(236,72,153,0.3)' : 'var(--border)'}`, color: solleciti.length > 0 ? '#ec4899' : 'var(--muted)', padding:'5px 10px', borderRadius:6, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
                   ⚡
                   {solleciti.length > 0 && <span style={{ fontSize:11, fontWeight:700 }}>{solleciti.length}</span>}
                 </button>

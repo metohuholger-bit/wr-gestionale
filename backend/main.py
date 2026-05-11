@@ -308,6 +308,23 @@ async def elimina_sollecito(wr: str, user=Depends(get_current_user)):
     await db.solleciti.delete_one({"wr": wr})
     return {"ok": True}
 
+@app.post("/admin/migra-solleciti")
+async def migra_solleciti(user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    cursor = db.solleciti.find({})
+    docs = await cursor.to_list(length=500)
+    migrati = 0
+    for doc in docs:
+        if "storico" not in doc:
+            storico = [{"messaggio": doc.get("messaggio", ""), "data": doc.get("data"), "da": doc.get("da", "")}]
+            await db.solleciti.update_one(
+                {"_id": doc["_id"]},
+                {"$set": {"storico": storico}, "$unset": {"messaggio": "", "data": "", "da": ""}}
+            )
+            migrati += 1
+    return {"migrati": migrati}
+
 # ── VIEW PUBBLICA (no auth) ──
 @app.get("/view/{token}")
 async def public_view(token: str):

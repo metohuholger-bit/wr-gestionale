@@ -226,6 +226,9 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
     if (window.L) {
       initMap();
     } else {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+      script.onload = initMap;
       document.head.appendChild(script);
     }
     return () => { if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; } };

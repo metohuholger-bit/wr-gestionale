@@ -289,10 +289,14 @@ async def get_solleciti(user=Depends(get_current_user)):
 async def crea_sollecito(s: Sollecito, user=Depends(get_current_user)):
     if user["role"] != "admin":
         raise HTTPException(status_code=403)
-    print(f"SOLLECITO: wr={s.wr} sub_code={s.sub_code} messaggio={s.messaggio}")
+    voce = {"messaggio": s.messaggio, "data": datetime.utcnow(), "da": user["email"]}
     await db.solleciti.update_one(
         {"wr": s.wr, "sub_code": s.sub_code},
-        {"$set": {"wr": s.wr, "sub_code": s.sub_code, "messaggio": s.messaggio, "data": datetime.utcnow(), "da": user["email"]}},
+        {
+            "$set": {"wr": s.wr, "sub_code": s.sub_code},
+            "$push": {"storico": voce},
+            "$inc": {"contatore": 1}
+        },
         upsert=True
     )
     return {"ok": True}

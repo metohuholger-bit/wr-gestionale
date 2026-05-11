@@ -401,6 +401,43 @@ function ConfrontaWR({ wrA, wrB, onClose }) {
   );
 }
 
+
+// ── STORICO SOLLECITI POPUP ──
+function StoricoSolleciti({ wr, solleciti, onClose }) {
+  const doc = solleciti.find(s => String(s.wr) === String(wr.WR));
+  const storico = doc?.storico || [];
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:'var(--panel)', border:'1px solid rgba(236,72,153,0.3)', borderRadius:12, width:460, maxHeight:'70vh', overflow:'hidden', display:'flex', flexDirection:'column' }}>
+        <div style={{ padding:'14px 18px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{ fontSize:18 }}>⚡</span>
+          <div>
+            <div style={{ fontSize:9, fontFamily:'var(--mono)', letterSpacing:3, color:'var(--muted)' }}>STORICO SOLLECITI</div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#ec4899' }}>WR {wr.WR} — {storico.length} sollecit{storico.length===1?'o':'i'}</div>
+          </div>
+          <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', color:'var(--muted)', fontSize:20, cursor:'pointer' }}>×</button>
+        </div>
+        <div style={{ overflow:'auto', flex:1, padding:'8px 0' }}>
+          {storico.length === 0 ? (
+            <div style={{ padding:20, textAlign:'center', color:'var(--muted)', fontSize:13 }}>Nessun sollecito</div>
+          ) : [...storico].reverse().map((s, i) => (
+            <div key={i} style={{ padding:'12px 18px', borderBottom:'1px solid var(--border)' }}>
+              <div style={{ display:'flex', gap:8, marginBottom:4 }}>
+                <span style={{ fontSize:11, color:'var(--muted)' }}>{s.da}</span>
+                <span style={{ fontSize:10, color:'var(--muted)', marginLeft:'auto' }}>{s.data ? new Date(s.data).toLocaleString('it-IT') : ''}</span>
+              </div>
+              {s.messaggio
+                ? <div style={{ background:'rgba(236,72,153,0.08)', border:'1px solid rgba(236,72,153,0.15)', borderRadius:6, padding:'8px 12px', fontSize:13, color:'#ec4899', fontStyle:'italic' }}>"{s.messaggio}"</div>
+                : <div style={{ fontSize:12, color:'var(--muted)', fontStyle:'italic' }}>Nessun messaggio</div>
+              }
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── POPUP SOLLECITI ──
 function SollicitiPopup({ solleciti, wr, onClose, onSelectWR }) {
   const [search, setSearch] = React.useState('');
@@ -472,6 +509,7 @@ export default function SubDashboard({ previewMode }) {
   const [solleciti, setSolleciti] = useState([]);
   const [showSolleciti, setShowSolleciti] = useState(false);
   const [showConfronta, setShowConfronta] = useState(false);
+  const [storicoWR, setStoricoWR] = useState(null);
   const [search, setSearch] = useState('');
   const [filtroStato, setFiltroStato] = useState('');
   const [filtroCentrale, setFiltroCentrale] = useState('');
@@ -618,6 +656,7 @@ export default function SubDashboard({ previewMode }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
+      {storicoWR && <StoricoSolleciti wr={storicoWR} solleciti={solleciti} onClose={() => setStoricoWR(null)} />}
       {showConfronta && selectedRows.size === 2 && (() => { const [a,b] = [...selectedRows]; const wrA = wr.find(w=>String(w.WR)===a); const wrB = wr.find(w=>String(w.WR)===b); return wrA && wrB ? <ConfrontaWR wrA={wrA} wrB={wrB} onClose={() => setShowConfronta(false)} /> : null; })()}
       {showSolleciti && <SollicitiPopup solleciti={solleciti} wr={wr} onClose={() => setShowSolleciti(false)} onSelectWR={w => { setSelectedWR(w); setActiveTab('pratiche'); }} />}
       {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} subCode={subCode} miniSquadre={miniSquadre} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} solleciti={solleciti} />}
@@ -786,6 +825,18 @@ export default function SubDashboard({ previewMode }) {
                           <td style={{ padding: '7px 12px', color: 'var(--muted)' }} onClick={() => setSelectedWR(w)}>{w.Pali || '—'}</td>
                           <td style={{ padding: '7px 12px', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--muted)' }} onClick={() => setSelectedWR(w)}>{w.JobType}</td>
                           <td style={{ padding: '7px 12px', color: 'var(--muted)', whiteSpace: 'nowrap' }} onClick={() => setSelectedWR(w)}>{w.Assistente}</td>
+                          <td style={{ padding:'4px 8px' }}>
+                            {(() => {
+                              const doc = solleciti.find(s => String(s.wr) === String(w.WR));
+                              const cnt = doc?.storico?.length || 0;
+                              return cnt > 0 ? (
+                                <button onClick={e => { e.stopPropagation(); setStoricoWR(w); }}
+                                  style={{ background:'rgba(236,72,153,0.15)', border:'1px solid rgba(236,72,153,0.3)', color:'#ec4899', padding:'2px 8px', borderRadius:4, fontSize:10, cursor:'pointer', fontWeight:700, whiteSpace:'nowrap' }}>
+                                  ⚡ {cnt}
+                                </button>
+                              ) : null;
+                            })()}
+                          </td>
                         </tr>
                       );
                     })}

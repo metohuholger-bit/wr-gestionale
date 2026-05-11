@@ -88,6 +88,49 @@ function ConfrontaWR({ wrA, wrB, onClose }) {
   );
 }
 
+
+// ── STORICO SOLLECITI POPUP ──
+function StoricoSolleciti({ wr, solleciti, onClose }) {
+  const doc = solleciti.find(s => String(s.wr) === String(wr.WR));
+  const storico = doc?.storico || [];
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:'var(--panel)', border:'1px solid rgba(236,72,153,0.3)', borderRadius:12, width:460, maxHeight:'70vh', overflow:'hidden', display:'flex', flexDirection:'column' }}>
+        <div style={{ padding:'14px 18px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{ fontSize:18 }}>⚡</span>
+          <div>
+            <div style={{ fontSize:9, fontFamily:'var(--mono)', letterSpacing:3, color:'var(--muted)' }}>STORICO SOLLECITI</div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#ec4899' }}>WR {wr.WR} — {storico.length} sollecit{storico.length === 1 ? 'o' : 'i'}</div>
+          </div>
+          <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', color:'var(--muted)', fontSize:20, cursor:'pointer' }}>×</button>
+        </div>
+        <div style={{ overflow:'auto', flex:1, padding:'8px 0' }}>
+          {storico.length === 0 ? (
+            <div style={{ padding:20, textAlign:'center', color:'var(--muted)', fontSize:13 }}>Nessun sollecito</div>
+          ) : [...storico].reverse().map((s, i) => (
+            <div key={i} style={{ padding:'12px 18px', borderBottom:'1px solid var(--border)' }}>
+              <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}>
+                <span style={{ fontSize:11, color:'var(--muted)' }}>{s.da}</span>
+                <span style={{ fontSize:10, color:'var(--muted)', marginLeft:'auto' }}>
+                  {s.data ? new Date(s.data).toLocaleString('it-IT') : ''}
+                </span>
+              </div>
+              {s.messaggio ? (
+                <div style={{ background:'rgba(236,72,153,0.08)', border:'1px solid rgba(236,72,153,0.15)', borderRadius:6, padding:'8px 12px', fontSize:13, color:'#ec4899', fontStyle:'italic' }}>
+                  "{s.messaggio}"
+                </div>
+              ) : (
+                <div style={{ fontSize:12, color:'var(--muted)', fontStyle:'italic' }}>Nessun messaggio</div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SollecitaPraticaPopup({ wr, API, onClose, onSollecitato }) {
   const [messaggio, setMessaggio] = React.useState('');
   const [saving, setSaving] = React.useState(false);
@@ -192,6 +235,7 @@ export default function Pratiche() {
   const [solleciti, setSolleciti] = useState([]);
   const [sollecitaWR, setSollecitaWR] = useState(null);
   const [showConfronta, setShowConfronta] = useState(false);
+  const [storicoWR, setStoricoWR] = useState(null);
   const [search, setSearch] = useState('');
   const [filtroSq, setFiltroSq] = useState('');
   const [filtroStato, setFiltroStato] = useState('');
@@ -274,6 +318,7 @@ export default function Pratiche() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 48px)', overflow: 'hidden' }}>
       {selected && <PopupWR w={selected} onClose={() => setSelected(null)} />}
+      {storicoWR && <StoricoSolleciti wr={storicoWR} solleciti={solleciti} onClose={() => setStoricoWR(null)} />}
       {showConfronta && checkedRows.size === 2 && (() => { const [a,b] = [...checkedRows]; const wrA = wr.find(w=>String(w.WR)===a); const wrB = wr.find(w=>String(w.WR)===b); return wrA && wrB ? <ConfrontaWR wrA={wrA} wrB={wrB} onClose={() => setShowConfronta(false)} /> : null; })()}
       {sollecitaWR && <SollecitaPraticaPopup wr={sollecitaWR} API={API} onClose={() => setSollecitaWR(null)} onSollecitato={wrNum => setSolleciti(prev => [...prev.filter(s => s.wr !== wrNum), { wr: wrNum, sub_code: sollecitaWR.Sq }])} />}
 
@@ -317,7 +362,7 @@ export default function Pratiche() {
                   {col.label} {sortCol === col.key ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </th>
               ))}
-              <th style={{ padding: '9px 8px', borderBottom: '1px solid var(--border)', fontSize:11, color:'#ec4899' }}>⚡</th>
+              <th style={{ padding: '9px 8px', borderBottom: '1px solid var(--border)', fontSize:11, color:'#ec4899', whiteSpace:'nowrap' }}>⚡ Solleciti</th>
             </tr>
           </thead>
           <tbody>
@@ -341,10 +386,25 @@ export default function Pratiche() {
                     </td>
                   ))}
                   <td style={{ padding:'4px 8px' }}>
-                    <button onClick={e => { e.stopPropagation(); setSollecitaWR(w); }}
-                      style={{ background: solleciti.some(s => s.wr === String(w.WR)) ? 'rgba(236,72,153,0.2)' : 'transparent', border:'1px solid rgba(236,72,153,0.2)', color:'#ec4899', padding:'3px 7px', borderRadius:4, fontSize:10, cursor:'pointer', whiteSpace:'nowrap' }}>
-                      ⚡
-                    </button>
+                    {(() => {
+                      const doc = solleciti.find(s => String(s.wr) === String(w.WR));
+                      const cnt = doc?.storico?.length || 0;
+                      return (
+                        <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+                          {cnt > 0 && (
+                            <button onClick={e => { e.stopPropagation(); setStoricoWR(w); }}
+                              style={{ background:'rgba(236,72,153,0.15)', border:'1px solid rgba(236,72,153,0.3)', color:'#ec4899', padding:'2px 7px', borderRadius:4, fontSize:10, cursor:'pointer', fontWeight:700 }}>
+                              ⚡ {cnt}
+                            </button>
+                          )}
+                          <button onClick={e => { e.stopPropagation(); setSollecitaWR(w); }}
+                            style={{ background:'transparent', border:'1px solid rgba(236,72,153,0.2)', color:'#ec4899', padding:'2px 6px', borderRadius:4, fontSize:10, cursor:'pointer' }}
+                            title="Aggiungi sollecito">
+                            +
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </td>
                 </tr>
               );

@@ -374,6 +374,27 @@ async def mostra_wr(wr: str, user=Depends(get_current_user)):
     await db.wr_nascoste.update_one({}, {"$pull": {"lista": wr}})
     return {"ok": True}
 
+# ── CATEGORIE DISCRIMINANTE ──
+DEFAULT_CATEGORIE = [
+    {"nome": "Fatto parziale", "emoji": "🔧", "pattern": "fatto.*su", "colore": "#f59e0b"},
+    {"nome": "Manca XPole", "emoji": "🪝", "pattern": "manca xp|xpole", "colore": "#8b5cf6"},
+    {"nome": "Manca cavetto/ONT", "emoji": "🔌", "pattern": "manca cavetto|manca ong|manca ongoing", "colore": "#14b8a6"},
+    {"nome": "Manca sistemazione", "emoji": "⚙", "pattern": "manca sist|manca cavo", "colore": "#f97316"},
+    {"nome": "Fatto", "emoji": "✅", "pattern": "^fatto$|fatto note|fatto pali", "colore": "#22c55e"},
+]
+
+@app.get("/categorie-discriminante")
+async def get_categorie(user=Depends(get_current_user)):
+    doc = await db.categorie_discriminante.find_one({}, {"_id": 0})
+    return doc or {"categorie": DEFAULT_CATEGORIE}
+
+@app.post("/categorie-discriminante")
+async def save_categorie(data: dict, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    await db.categorie_discriminante.update_one({}, {"$set": data}, upsert=True)
+    return {"ok": True}
+
 # ── IMPOSTAZIONI ──
 @app.get("/impostazioni")
 async def get_impostazioni(user=Depends(get_current_user)):

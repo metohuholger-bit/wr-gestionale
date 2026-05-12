@@ -635,6 +635,10 @@ function SubDashboardMobile({ wr, miniSquadre, solleciti, setSolleciti, setMiniS
     if (filtroCard === 'over90' && (daysDiff(w.Datadispaccio)||0) <= 90) return false;
     if (filtroCard === 'urgenti' && !(w.Note||'').match(/670050|670100/)) return false;
     if (filtroCard === 'sollecitati' && !solleciti.some(s => String(s.wr) === String(w.WR))) return false;
+    if (filtroCategoria) {
+      const disc = (w.Discriminante || '').toLowerCase();
+      try { if (!new RegExp(filtroCategoria, 'i').test(disc)) return false; } catch(e) { if (!disc.includes(filtroCategoria)) return false; }
+    }
     if (filtroStato && w.StatoWR !== filtroStato) return false;
     if (search) return Object.values(w).some(v => v && String(v).toLowerCase().includes(search.toLowerCase()));
     return true;
@@ -850,6 +854,8 @@ export default function SubDashboard({ previewMode }) {
   const [filtroTipo, setFiltroTipo] = useState('');
   const [filtroCard, setFiltroCard] = useState(null);
   const [search, setSearch] = useState('');
+  const [categorie, setCategorie] = useState([]);
+  const [filtroCategoria, setFiltroCategoria] = useState(null);
   const [multiWR, setMultiWR] = useState('');
   const [showMultiWR, setShowMultiWR] = useState(false); // null | 'over90' | 'avvicin' | 'urgenti'
   const [colFilter, setColFilter] = useState({ WR:'', StatoWR:'', Centrale:'', Desc_Centrale:'', Discriminante:'', Indirizzo:'', Localita:'', Pali:'', JobType:'', Assistente:'' });
@@ -879,11 +885,12 @@ export default function SubDashboard({ previewMode }) {
       .finally(() => setLoading(false));
       return;
     }
-    Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/mini-squadre`), axios.get(`${API}/solleciti`)])
-      .then(([wrR, sqR, solR]) => {
+    Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/mini-squadre`), axios.get(`${API}/solleciti`), axios.get(`${API}/categorie-discriminante`)])
+      .then(([wrR, sqR, solR, catR]) => {
         setWr(wrR.data.filter(w => !STATI_ESCLUSI.includes(w.StatoWR?.toUpperCase())));
         setMiniSquadre(sqR.data);
         setSolleciti(solR.data);
+        setCategorie(catR.data.categorie || []);
       }).catch(() => {}).finally(() => setLoading(false));
   }, [API, previewMode?.subCode]);
 
@@ -924,6 +931,10 @@ export default function SubDashboard({ previewMode }) {
 
   const filtered = wr.filter(w => {
     if (filtroCard === 'sollecitati' && !solleciti.some(s => String(s.wr) === String(w.WR))) return false;
+    if (filtroCategoria) {
+      const disc = (w.Discriminante || '').toLowerCase();
+      try { if (!new RegExp(filtroCategoria, 'i').test(disc)) return false; } catch(e) { if (!disc.includes(filtroCategoria)) return false; }
+    }
     if (multiWR.trim()) {
       const lista = multiWR.split(/[\n,;\s]+/).map(s => s.trim()).filter(Boolean);
       if (lista.length > 0 && !lista.includes(String(w.WR).trim())) return false;
@@ -1112,6 +1123,21 @@ export default function SubDashboard({ previewMode }) {
                 ⚠ +90gg
               </button>
               <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:10 }}>
+                {categorie.length > 0 && (
+                  <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                    {categorie.map((cat, i) => {
+                      const count = wr.filter(w => { try { return new RegExp(cat.pattern, 'i').test(w.Discriminante || ''); } catch(e) { return false; } }).length;
+                      if (count === 0) return null;
+                      const isActive = filtroCategoria === cat.pattern;
+                      return (
+                        <button key={i} onClick={() => { setFiltroCategoria(isActive ? null : cat.pattern); setPage(1); setFiltroCard(null); }}
+                          style={{ padding:'3px 8px', borderRadius:20, border:`1px solid ${cat.colore}`, background: isActive ? `${cat.colore}33` : 'transparent', color:cat.colore, fontSize:10, cursor:'pointer', fontWeight: isActive ? 700 : 400, whiteSpace:'nowrap' }}>
+                          {cat.emoji} {cat.nome} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 {selectedRows.size === 2 && (
                   <button onClick={() => setShowConfronta(true)}
                     style={{ background:'rgba(245,158,11,0.15)', border:'1px solid rgba(245,158,11,0.3)', color:'var(--accent2)', padding:'5px 10px', borderRadius:6, fontSize:12, cursor:'pointer', fontWeight:600 }}>

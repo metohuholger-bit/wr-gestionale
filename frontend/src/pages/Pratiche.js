@@ -257,6 +257,8 @@ export default function Pratiche() {
   const [loading, setLoading] = useState(true);
   const [solleciti, setSolleciti] = useState([]);
   const [wrNascoste, setWrNascoste] = useState([]);
+  const [categorie, setCategorie] = useState([]);
+  const [filtroCategoria, setFiltroCategoria] = useState(null);
   const [sollecitaWR, setSollecitaWR] = useState(null);
   const [showConfronta, setShowConfronta] = useState(false);
   const [storicoWR, setStoricoWR] = useState(null);
@@ -272,8 +274,8 @@ export default function Pratiche() {
   const PER_PAGE = 100;
 
   useEffect(() => {
-    Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/solleciti`), axios.get(`${API}/wr-nascoste`)])
-      .then(([wrR, solR, nasR]) => { setWr(wrR.data); setSolleciti(solR.data); setWrNascoste(nasR.data.lista || []); })
+    Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/solleciti`), axios.get(`${API}/wr-nascoste`), axios.get(`${API}/categorie-discriminante`)])
+      .then(([wrR, solR, nasR, catR]) => { setWr(wrR.data); setSolleciti(solR.data); setWrNascoste(nasR.data.lista || []); setCategorie(catR.data.categorie || []); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [API]);
@@ -310,6 +312,10 @@ export default function Pratiche() {
     if (multiWR.trim()) {
       const lista = multiWR.split(/[\n,;\s]+/).map(s => s.trim()).filter(Boolean);
       if (lista.length > 0 && !lista.includes(String(w.WR).trim())) return false;
+    }
+    if (filtroCategoria) {
+      const disc = (w.Discriminante || '').toLowerCase();
+      try { if (!new RegExp(filtroCategoria, 'i').test(disc)) return false; } catch(e) { if (!disc.includes(filtroCategoria)) return false; }
     }
     if (filtroDiscriminante && !w.Discriminante?.toLowerCase().includes(filtroDiscriminante.toLowerCase())) return false;
     if (filtro90 && !isOld(w.Datadispaccio)) return false;
@@ -392,6 +398,21 @@ export default function Pratiche() {
           ⚠ +90gg {filtro90 && `(${filtered.length})`}
         </button>
         <button onClick={resetFiltri} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '5px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Reset</button>
+        {categorie.length > 0 && (
+          <div style={{ width:'100%', display:'flex', gap:6, flexWrap:'wrap', paddingTop:6, borderTop:'1px solid var(--border)', marginTop:4 }}>
+            {categorie.map((cat, i) => {
+              const count = wr.filter(w => { try { return new RegExp(cat.pattern, 'i').test(w.Discriminante || ''); } catch(e) { return (w.Discriminante||'').toLowerCase().includes(cat.pattern); } }).length;
+              if (count === 0) return null;
+              const isActive = filtroCategoria === cat.pattern;
+              return (
+                <button key={i} onClick={() => { setFiltroCategoria(isActive ? null : cat.pattern); setPage(1); }}
+                  style={{ padding:'3px 10px', borderRadius:20, border:`1px solid ${cat.colore}`, background: isActive ? `${cat.colore}33` : 'transparent', color:cat.colore, fontSize:11, cursor:'pointer', fontWeight: isActive ? 700 : 400 }}>
+                  {cat.emoji} {cat.nome} ({count})
+                </button>
+              );
+            })}
+          </div>
+        )}
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--muted)' }}>
           <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{filtered.length}</span> / {wr.length} WR
         </span>

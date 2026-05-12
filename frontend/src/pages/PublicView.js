@@ -92,11 +92,16 @@ export default function PublicView() {
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState('');
   const [view, setView] = useState('lista');
+  const [categorie, setCategorie] = useState([]);
+  const [filtroCategoria, setFiltroCategoria] = useState(null);
 
   useEffect(() => {
     axios.get(`${API}/view/${token}`)
       .then(r => setData(r.data))
       .catch(() => setError('Link non valido o scaduto'));
+    axios.get(`${API}/categorie-discriminante`)
+      .then(r => setCategorie(r.data.categorie || []))
+      .catch(() => {});
   }, [token]);
 
   if (error) return (
@@ -143,7 +148,26 @@ export default function PublicView() {
       {/* Content */}
       {view === 'lista' ? (
         <div style={{ flex: 1, overflow: 'auto' }}>
-          {data.wr.map((w, i) => {
+          {/* Badge categorie */}
+        {categorie.length > 0 && (
+          <div style={{ padding:'8px 12px', display:'flex', gap:6, flexWrap:'wrap', borderBottom:'1px solid #1e2330' }}>
+            {categorie.filter(cat => {
+              try { return data.wr.some(w => new RegExp(cat.pattern, 'i').test(w.Discriminante || '')); } catch(e) { return false; }
+            }).map((cat, i) => {
+              const isActive = filtroCategoria === cat.pattern;
+              return (
+                <button key={i} onClick={() => setFiltroCategoria(isActive ? null : cat.pattern)}
+                  style={{ padding:'3px 8px', borderRadius:20, border:`1px solid ${cat.colore}`, background: isActive ? `${cat.colore}33` : 'transparent', color:cat.colore, fontSize:11, cursor:'pointer', fontWeight: isActive ? 700 : 400 }}>
+                  {cat.emoji} {cat.nome}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {data.wr.filter(w => {
+          if (!filtroCategoria) return true;
+          try { return new RegExp(filtroCategoria, 'i').test(w.Discriminante || ''); } catch(e) { return true; }
+        }).map((w, i) => {
             const old = isOld(w.Datadispaccio);
             const isSel = selected?.WR === w.WR;
             return (

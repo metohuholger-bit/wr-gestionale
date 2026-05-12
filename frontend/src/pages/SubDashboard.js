@@ -577,6 +577,225 @@ function SollicitiPopup({ solleciti, wr, onClose, onSelectWR }) {
   );
 }
 
+
+// ── MOBILE LAYOUT ──
+function SubDashboardMobile({ wr, miniSquadre, solleciti, setSolleciti, setMiniSquadre, subCode, API, user, logout, navigate, previewMode }) {
+  const [activeTab, setActiveTab] = useState('pratiche'); // pratiche | squadre | mappa
+  const [showFiltri, setShowFiltri] = useState(false);
+  const [search, setSearch] = useState('');
+  const [filtroStato, setFiltroStato] = useState('');
+  const [filtroCard, setFiltroCard] = useState(null);
+  const [selectedWR, setSelectedWR] = useState(null);
+  const [showMappa, setShowMappa] = useState(false);
+  const [storicoWR, setStoricoWR] = useState(null);
+  const [showSolleciti, setShowSolleciti] = useState(false);
+  const [selectedRows, setSelectedRows] = useState(new Set());
+  const [nomeNuovaSquadra, setNomeNuovaSquadra] = useState('');
+
+  const oggi = new Date();
+  const daysDiff = (d) => {
+    if (!d) return null;
+    let date;
+    if (d.includes('-') && d.indexOf('-') === 4) date = new Date(d);
+    else if (d.includes('/')) { const p = d.split('/'); date = new Date(p[2], p[1]-1, p[0]); }
+    else return null;
+    return (oggi - date) / (1000*60*60*24);
+  };
+  const isOld = (d) => (daysDiff(d) || 0) > 90;
+
+  const filtered = wr.filter(w => {
+    if (filtroCard === 'over90' && (daysDiff(w.Datadispaccio)||0) <= 90) return false;
+    if (filtroCard === 'urgenti' && !(w.Note||'').match(/670050|670100/)) return false;
+    if (filtroCard === 'sollecitati' && !solleciti.some(s => String(s.wr) === String(w.WR))) return false;
+    if (filtroStato && w.StatoWR !== filtroStato) return false;
+    if (search) return Object.values(w).some(v => v && String(v).toLowerCase().includes(search.toLowerCase()));
+    return true;
+  });
+
+  const stati = [...new Set(wr.map(w => w.StatoWR).filter(Boolean))].sort();
+  const oltre90 = wr.filter(w => isOld(w.Datadispaccio)).length;
+  const urgenti = wr.filter(w => (w.Note||'').match(/670050|670100/)).length;
+
+  const toggleRow = (wrNum) => setSelectedRows(prev => { const s = new Set(prev); if (s.has(wrNum)) s.delete(wrNum); else s.add(wrNum); return s; });
+
+  const creaSquadra = async () => {
+    if (!nomeNuovaSquadra || selectedRows.size === 0) return;
+    try {
+      const r = await axios.post(`${API}/mini-squadre`, { nome: nomeNuovaSquadra, sub_code: subCode, wr_list: [...selectedRows] });
+      navigator.clipboard.writeText(`${window.location.origin}/#/view/${r.data.token}`);
+      setMiniSquadre(prev => [...prev, { nome: nomeNuovaSquadra, sub_code: subCode, wr_list: [...selectedRows], link_token: r.data.token }]);
+      setNomeNuovaSquadra('');
+      setSelectedRows(new Set());
+    } catch(e) { console.error(e); }
+  };
+
+  const tabBtnStyle = (tab) => ({
+    flex:1, padding:'10px 0', border:'none', background: activeTab === tab ? 'rgba(59,130,246,0.15)' : 'transparent',
+    color: activeTab === tab ? '#3b82f6' : '#64748b', fontSize:11, cursor:'pointer',
+    borderTop: activeTab === tab ? '2px solid #3b82f6' : '2px solid transparent',
+    fontFamily:'monospace', letterSpacing:1
+  });
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', height:'100vh', background:'var(--bg)', color:'var(--text)', overflow:'hidden' }}>
+      {selectedWR && <PopupWR w={selectedWR} onClose={() => setSelectedWR(null)} />}
+      {storicoWR && <StoricoSolleciti wr={storicoWR} solleciti={solleciti} setSolleciti={setSolleciti} API={API} onClose={() => setStoricoWR(null)} />}
+      {showSolleciti && <SollicitiPopup solleciti={solleciti} wr={wr} onClose={() => setShowSolleciti(false)} onSelectWR={w => { setSelectedWR(w); }} />}
+      {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} subCode={subCode} miniSquadre={miniSquadre} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} solleciti={solleciti} />}
+
+      {/* Topbar */}
+      <div style={{ background:'var(--panel)', borderBottom:'1px solid var(--border)', padding:'0 12px', height:44, display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
+        <div style={{ fontFamily:'monospace', fontSize:12, fontWeight:700, color:'#3b82f6', letterSpacing:2 }}>MDS/WR</div>
+        <span style={{ fontSize:10, padding:'2px 6px', borderRadius:3, background:'rgba(34,197,94,0.15)', color:'var(--green)', border:'1px solid rgba(34,197,94,0.3)', fontFamily:'monospace' }}>{subCode}</span>
+        {solleciti.length > 0 && (
+          <button onClick={() => setShowSolleciti(true)} style={{ background:'rgba(236,72,153,0.1)', border:'1px solid rgba(236,72,153,0.3)', color:'#ec4899', padding:'3px 8px', borderRadius:5, fontSize:11, cursor:'pointer' }}>
+            ⚡ {solleciti.length}
+          </button>
+        )}
+        <div style={{ marginLeft:'auto', display:'flex', gap:8, alignItems:'center' }}>
+          {user?.picture && <img src={user.picture} alt="" style={{ width:24, height:24, borderRadius:'50%' }} />}
+          {!previewMode && <button onClick={() => { logout(); navigate('/login'); }} style={{ background:'transparent', border:'1px solid var(--border)', color:'var(--muted)', padding:'3px 8px', borderRadius:5, fontSize:11, cursor:'pointer' }}>Esci</button>}
+        </div>
+      </div>
+
+      {/* Alert banner */}
+      {(oltre90 > 0 || urgenti > 0) && (
+        <div style={{ background:'rgba(239,68,68,0.08)', borderBottom:'1px solid rgba(239,68,68,0.2)', padding:'6px 12px', flexShrink:0 }}>
+          {urgenti > 0 && <div style={{ fontSize:11, color:'#ec4899', fontWeight:600 }}>⚡ {urgenti} WR urgenti</div>}
+          {oltre90 > 0 && <div style={{ fontSize:11, color:'#ef4444' }}>⚠ {oltre90} WR oltre 90gg</div>}
+        </div>
+      )}
+
+      {/* Card stats */}
+      <div style={{ padding:'8px 12px', display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6, flexShrink:0 }}>
+        {[
+          { label:'TOTALI', val:wr.length, color:'#3b82f6', key:'reset' },
+          { label:'+90GG', val:oltre90, color:'#ef4444', key:'over90' },
+          { label:'URGENTI', val:urgenti, color:'#ec4899', key:'urgenti' },
+          { label:'SOLLECITI', val:solleciti.length, color:'#ec4899', key:'sollecitati' },
+          { label:'SQUADRE', val:miniSquadre.length, color:'#f59e0b', key:null },
+          { label:'FILTRATI', val:filtered.length, color:'#22c55e', key:null },
+        ].map((s, i) => (
+          <div key={i} onClick={() => { if(s.key === 'reset') setFiltroCard(null); else if(s.key) setFiltroCard(filtroCard === s.key ? null : s.key); setActiveTab('pratiche'); }}
+            style={{ background: filtroCard === s.key && s.key !== 'reset' ? `${s.color}22` : 'var(--panel)', border:`1px solid ${filtroCard === s.key && s.key !== 'reset' ? s.color : 'var(--border)'}`, borderRadius:8, padding:'6px 8px', cursor: s.key ? 'pointer' : 'default' }}>
+            <div style={{ fontSize:8, fontFamily:'monospace', letterSpacing:1, color:s.color, marginBottom:2 }}>{s.label}</div>
+            <div style={{ fontSize:18, fontWeight:700, color:s.color }}>{s.val}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Content area */}
+      <div style={{ flex:1, overflow:'hidden', display:'flex', flexDirection:'column' }}>
+        {activeTab === 'pratiche' && (
+          <>
+            {/* Search bar */}
+            <div style={{ padding:'6px 12px', borderBottom:'1px solid var(--border)', display:'flex', gap:6, flexShrink:0 }}>
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca..."
+                style={{ flex:1, background:'var(--bg)', border:'1px solid var(--border)', color:'var(--text)', padding:'6px 10px', borderRadius:6, fontSize:13, outline:'none' }} />
+              <button onClick={() => setShowFiltri(!showFiltri)}
+                style={{ background: filtroStato ? 'rgba(59,130,246,0.2)' : 'var(--bg)', border:'1px solid var(--border)', color: filtroStato ? 'var(--accent)' : 'var(--muted)', padding:'6px 10px', borderRadius:6, fontSize:13, cursor:'pointer' }}>
+                ⚙
+              </button>
+              <button onClick={() => setShowMappa(true)}
+                style={{ background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.3)', color:'var(--green)', padding:'6px 10px', borderRadius:6, fontSize:13, cursor:'pointer' }}>
+                ◎
+              </button>
+            </div>
+
+            {/* Filtri drawer */}
+            {showFiltri && (
+              <div style={{ padding:'8px 12px', background:'var(--panel)', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+                <select value={filtroStato} onChange={e => setFiltroStato(e.target.value)}
+                  style={{ width:'100%', background:'var(--bg)', border:'1px solid var(--border)', color:'var(--text)', padding:'6px 8px', borderRadius:6, fontSize:12, outline:'none' }}>
+                  <option value="">Tutti gli stati</option>
+                  {stati.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            )}
+
+            {/* Selezione bar */}
+            {selectedRows.size > 0 && (
+              <div style={{ padding:'6px 12px', background:'rgba(245,158,11,0.1)', borderBottom:'1px solid var(--border)', display:'flex', gap:8, alignItems:'center', flexShrink:0 }}>
+                <span style={{ fontSize:12, color:'var(--accent2)' }}>🟡 {selectedRows.size} selezionate</span>
+                <input value={nomeNuovaSquadra} onChange={e => setNomeNuovaSquadra(e.target.value)} placeholder="Nome squadra..."
+                  style={{ flex:1, background:'var(--bg)', border:'1px solid var(--border)', color:'var(--text)', padding:'4px 8px', borderRadius:5, fontSize:12, outline:'none' }} />
+                <button onClick={creaSquadra} disabled={!nomeNuovaSquadra}
+                  style={{ background:'rgba(245,158,11,0.2)', border:'1px solid var(--accent2)', color:'var(--accent2)', padding:'4px 10px', borderRadius:5, fontSize:11, cursor:'pointer', whiteSpace:'nowrap' }}>
+                  Crea
+                </button>
+              </div>
+            )}
+
+            {/* Lista pratiche mobile - card style */}
+            <div style={{ flex:1, overflow:'auto' }}>
+              {filtered.map((w, i) => {
+                const old = isOld(w.Datadispaccio);
+                const isSel = selectedRows.has(String(w.WR));
+                const solDoc = solleciti.find(s => String(s.wr) === String(w.WR));
+                const solCnt = solDoc?.storico?.length || 0;
+                return (
+                  <div key={i} style={{ padding:'10px 12px', borderBottom:'1px solid var(--border)', background: isSel ? 'rgba(245,158,11,0.08)' : old ? 'rgba(239,68,68,0.03)' : 'transparent', borderLeft:`3px solid ${isSel ? '#f59e0b' : old ? '#ef4444' : 'transparent'}` }}>
+                    <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:4 }}>
+                      <input type="checkbox" checked={isSel} onChange={() => toggleRow(String(w.WR))} style={{ flexShrink:0 }} />
+                      <span onClick={() => setSelectedWR(w)} style={{ fontFamily:'monospace', fontSize:13, color:'#3b82f6', fontWeight:700, flex:1, cursor:'pointer' }}>WR {w.WR}</span>
+                      {solCnt > 0 && <button onClick={() => setStoricoWR(w)} style={{ background:'rgba(236,72,153,0.15)', border:'1px solid rgba(236,72,153,0.3)', color:'#ec4899', padding:'2px 6px', borderRadius:4, fontSize:10, cursor:'pointer' }}>⚡{solCnt}</button>}
+                      <span style={{ fontSize:10, padding:'2px 6px', borderRadius:3, background: old ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.1)', color: old ? '#ef4444' : '#22c55e', flexShrink:0 }}>{old ? '+90gg' : w.StatoWR}</span>
+                    </div>
+                    <div onClick={() => setSelectedWR(w)} style={{ fontSize:12, color:'var(--muted)', cursor:'pointer' }}>{w.Indirizzo}, {w.Localita}</div>
+                    <div style={{ display:'flex', gap:8, marginTop:3, fontSize:11, color:'#475569' }}>
+                      <span>{w.Datadispaccio}</span>
+                      {w.Centrale && <span>• {w.Centrale}</span>}
+                      {w.Pali && <span>• {w.Pali} pali</span>}
+                    </div>
+                    {w.Discriminante && <div style={{ fontSize:10, color:'#f59e0b', marginTop:2 }}>{w.Discriminante}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {activeTab === 'squadre' && (
+          <div style={{ flex:1, overflow:'auto', padding:12 }}>
+            {miniSquadre.length === 0
+              ? <div style={{ color:'var(--muted)', textAlign:'center', paddingTop:40, fontSize:13 }}>Nessuna mini-squadra. Vai sulla mappa o seleziona pratiche.</div>
+              : miniSquadre.map(sq => {
+                const sqWrs = sq.wr_list?.map(wrNum => wr.find(w => String(w.WR) === String(wrNum))).filter(Boolean) || [];
+                return (
+                  <div key={sq.link_token} style={{ marginBottom:10, background:'var(--panel)', border:'1px solid var(--border)', borderRadius:10, overflow:'hidden' }}>
+                    <div style={{ padding:'10px 14px', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid var(--border)' }}>
+                      <span style={{ fontSize:13, fontWeight:600, flex:1 }}>{sq.nome}</span>
+                      <span style={{ fontSize:11, color:'var(--muted)' }}>{sqWrs.length} WR</span>
+                      <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/#/view/${sq.link_token}`)}
+                        style={{ background:'rgba(59,130,246,0.15)', border:'1px solid rgba(59,130,246,0.3)', color:'var(--accent)', padding:'4px 10px', borderRadius:5, fontSize:11, cursor:'pointer' }}>
+                        ⎘ Link
+                      </button>
+                    </div>
+                    {sqWrs.slice(0,3).map((w, i) => w && (
+                      <div key={i} onClick={() => setSelectedWR(w)} style={{ padding:'6px 14px', borderBottom:'1px solid var(--border)', display:'flex', gap:8, cursor:'pointer' }}>
+                        <span style={{ fontFamily:'monospace', fontSize:11, color:'var(--accent)' }}>{w.WR}</span>
+                        <span style={{ fontSize:11, color:'var(--muted)', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{w.Indirizzo}</span>
+                      </div>
+                    ))}
+                    {sqWrs.length > 3 && <div style={{ padding:'4px 14px', fontSize:11, color:'var(--muted)' }}>+{sqWrs.length-3} altre...</div>}
+                  </div>
+                );
+              })
+            }
+          </div>
+        )}
+      </div>
+
+      {/* Bottom nav */}
+      <div style={{ display:'flex', borderTop:'1px solid var(--border)', background:'var(--panel)', flexShrink:0 }}>
+        <button style={tabBtnStyle('pratiche')} onClick={() => setActiveTab('pratiche')}>≡ PRATICHE</button>
+        <button style={tabBtnStyle('squadre')} onClick={() => setActiveTab('squadre')}>⬡ SQUADRE</button>
+        <button style={{ ...tabBtnStyle('mappa'), flex:1 }} onClick={() => setShowMappa(true)}>◎ MAPPA</button>
+      </div>
+    </div>
+  );
+}
+
 export default function SubDashboard({ previewMode }) {
   const { API, user, logout } = useAuth();
   const navigate = useNavigate();
@@ -590,7 +809,13 @@ export default function SubDashboard({ previewMode }) {
   const [showSolleciti, setShowSolleciti] = useState(false);
   const [showConfronta, setShowConfronta] = useState(false);
   const [storicoWR, setStoricoWR] = useState(null);
-  const [search, setSearch] = useState('');
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
   const [filtroStato, setFiltroStato] = useState('');
   const [filtroCentrale, setFiltroCentrale] = useState('');
   const [filtroComune, setFiltroComune] = useState('');
@@ -740,6 +965,16 @@ export default function SubDashboard({ previewMode }) {
   const resetFiltroCard = () => setFiltroCard(null);
 
   const tabStyle = (tab) => ({ padding: '8px 16px', fontSize: 13, cursor: 'pointer', border: 'none', background: activeTab === tab ? 'rgba(59,130,246,0.15)' : 'transparent', color: activeTab === tab ? 'var(--accent)' : 'var(--muted)', borderBottom: activeTab === tab ? '2px solid var(--accent)' : '2px solid transparent', marginBottom: -1 });
+
+  // Mobile layout
+  if (isMobile) return (
+    <SubDashboardMobile
+      wr={wr} miniSquadre={miniSquadre} solleciti={solleciti}
+      setSolleciti={setSolleciti} setMiniSquadre={setMiniSquadre}
+      subCode={subCode} API={API} user={user} logout={logout}
+      navigate={navigate} previewMode={previewMode}
+    />
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>

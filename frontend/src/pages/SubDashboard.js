@@ -258,10 +258,12 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
   }, []);
 
   const selectStyle = { background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 5, fontSize: 11, outline: 'none', width: '100%' };
+  const isMobileMap = window.innerWidth < 768;
+  const [showPanelMobile, setShowPanelMobile] = React.useState(false);
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: '95vw', height: '90vh', background: 'var(--panel)', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ width: isMobileMap ? '100vw' : '95vw', height: isMobileMap ? '100vh' : '90vh', background: 'var(--panel)', borderRadius: isMobileMap ? 0 : 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
         <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)' }}>
@@ -335,11 +337,18 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
         )}
 
         {/* Body: mappa + pannello */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
           <div ref={mapRef} style={{ flex: 1 }} />
+          {/* Toggle panel button on mobile */}
+          {isMobileMap && (
+            <button onClick={() => setShowPanelMobile(!showPanelMobile)}
+              style={{ position:'absolute', bottom:16, right:16, zIndex:1000, background:'var(--panel)', border:'1px solid var(--border)', color:'var(--accent)', padding:'10px 14px', borderRadius:8, fontSize:13, cursor:'pointer', boxShadow:'0 2px 8px rgba(0,0,0,0.4)' }}>
+              {showPanelMobile ? '◎ Mappa' : '≡ Lista WR'}
+            </button>
+          )}
 
           {/* Pannello laterale */}
-          <div style={{ width: 300, background: 'var(--bg)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+          <div style={{ width: isMobileMap ? '100%' : 300, background: 'var(--bg)', borderLeft: isMobileMap ? 'none' : '1px solid var(--border)', display: isMobileMap && !showPanelMobile ? 'none' : 'flex', flexDirection: 'column', flexShrink: 0, position: isMobileMap ? 'absolute' : 'relative', inset: isMobileMap ? 0 : 'auto', zIndex: isMobileMap ? 500 : 'auto' }}>
             <div style={{ padding: 10, borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
               <input value={searchWR} onChange={e => setSearchWR(e.target.value)} placeholder="Cerca WR, indirizzo..." style={selectStyle} />
               <input value={filtroCentrale} onChange={e => setFiltroCentrale(e.target.value)} placeholder="Cerca centrale (es. 575)..." style={selectStyle} />

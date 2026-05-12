@@ -605,7 +605,7 @@ function SollicitiPopup({ solleciti, wr, onClose, onSelectWR }) {
 
 
 // ── MOBILE LAYOUT ──
-function SubDashboardMobile({ wr, miniSquadre, solleciti, setSolleciti, setMiniSquadre, subCode, API, previewMode }) {
+function SubDashboardMobile({ wr, miniSquadre, solleciti, setSolleciti, setMiniSquadre, subCode, API, previewMode, categorie }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('pratiche'); // pratiche | squadre | mappa
@@ -613,6 +613,7 @@ function SubDashboardMobile({ wr, miniSquadre, solleciti, setSolleciti, setMiniS
   const [search, setSearch] = useState('');
   const [filtroStato, setFiltroStato] = useState('');
   const [filtroCard, setFiltroCard] = useState(null);
+  const [filtroCategoria, setFiltroCategoria] = useState(null);
   const [selectedWR, setSelectedWR] = useState(null);
   const [showMappa, setShowMappa] = useState(false);
   const [storicoWR, setStoricoWR] = useState(null);
@@ -640,6 +641,12 @@ function SubDashboardMobile({ wr, miniSquadre, solleciti, setSolleciti, setMiniS
       try { if (!new RegExp(filtroCategoria, 'i').test(disc)) return false; } catch(e) { if (!disc.includes(filtroCategoria)) return false; }
     }
     if (filtroStato && w.StatoWR !== filtroStato) return false;
+    if (filtroCategoria) {
+      try {
+        const disc = (w.Discriminante || '');
+        if (!new RegExp(filtroCategoria, 'i').test(disc)) return false;
+      } catch(e) { /* pattern non valido, ignora */ }
+    }
     if (search) return Object.values(w).some(v => v && String(v).toLowerCase().includes(search.toLowerCase()));
     return true;
   });
@@ -734,6 +741,22 @@ function SubDashboardMobile({ wr, miniSquadre, solleciti, setSolleciti, setMiniS
               </button>
             </div>
 
+            {/* Badge categorie */}
+            {categorie && categorie.length > 0 && (
+              <div style={{ padding:'4px 12px', display:'flex', gap:6, flexWrap:'wrap', background:'var(--bg)', borderBottom:'1px solid var(--border)' }}>
+                {categorie.map((cat, i) => {
+                  const count = wr.filter(w => { try { return new RegExp(cat.pattern, 'i').test(w.Discriminante || ''); } catch(e) { return false; } }).length;
+                  if (count === 0) return null;
+                  const isActive = filtroCategoria === cat.pattern;
+                  return (
+                    <button key={i} onClick={() => { setFiltroCategoria(isActive ? null : cat.pattern); }}
+                      style={{ padding:'3px 8px', borderRadius:20, border:`1px solid ${cat.colore}`, background: isActive ? `${cat.colore}33` : 'transparent', color:cat.colore, fontSize:10, cursor:'pointer', fontWeight: isActive ? 700 : 400, whiteSpace:'nowrap' }}>
+                      {cat.emoji} {cat.nome} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {/* Filtri drawer */}
             {showFiltri && (
               <div style={{ padding:'8px 12px', background:'var(--panel)', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
@@ -1012,6 +1035,7 @@ export default function SubDashboard({ previewMode }) {
       wr={wr} miniSquadre={miniSquadre} solleciti={solleciti}
       setSolleciti={setSolleciti} setMiniSquadre={setMiniSquadre}
       subCode={subCode} API={API} previewMode={previewMode}
+      categorie={categorie}
     />
   );
 

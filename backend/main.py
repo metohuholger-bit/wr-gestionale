@@ -174,6 +174,11 @@ async def get_wr(user=Depends(get_current_user)):
                 disc = (r.get("Discriminante") or "").lower()
                 return any(p in disc for p in parole_nascoste)
             rows = [r for r in rows if not discriminante_nascosto(r)]
+        # Nascondi WR manuali
+        wr_nascoste_doc = await db.wr_nascoste.find_one({}, {"_id": 0})
+        wr_nascoste_lista = (wr_nascoste_doc or {}).get("lista", [])
+        if wr_nascoste_lista:
+            rows = [r for r in rows if str(r.get("WR", "")).strip() not in wr_nascoste_lista]
     elif user["role"] == "squad":
         sq = await db.mini_squadre.find_one({"link_token": user.get("squad_token")})
         if sq:
@@ -346,6 +351,28 @@ async def migra_solleciti(user=Depends(get_current_user)):
             migrati += 1
     return {"migrati": migrati}
 
+
+# ── WR NASCOSTE ──
+@app.get("/wr-nascoste")
+async def get_wr_nascoste(user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    doc = await db.wr_nascoste.find_one({}, {"_id": 0})
+    return doc or {"lista": []}
+
+@app.post("/wr-nascoste/{wr}")
+async def nascondi_wr(wr: str, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    await db.wr_nascoste.update_one({}, {"$addToSet": {"lista": wr}}, upsert=True)
+    return {"ok": True}
+
+@app.delete("/wr-nascoste/{wr}")
+async def mostra_wr(wr: str, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    await db.wr_nascoste.update_one({}, {"$pull": {"lista": wr}})
+    return {"ok": True}
 
 # ── IMPOSTAZIONI ──
 @app.get("/impostazioni")

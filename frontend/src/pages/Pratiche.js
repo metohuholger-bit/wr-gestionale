@@ -256,6 +256,7 @@ export default function Pratiche() {
   const [wr, setWr] = useState([]);
   const [loading, setLoading] = useState(true);
   const [solleciti, setSolleciti] = useState([]);
+  const [wrNascoste, setWrNascoste] = useState([]);
   const [sollecitaWR, setSollecitaWR] = useState(null);
   const [showConfronta, setShowConfronta] = useState(false);
   const [storicoWR, setStoricoWR] = useState(null);
@@ -271,8 +272,8 @@ export default function Pratiche() {
   const PER_PAGE = 100;
 
   useEffect(() => {
-    Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/solleciti`)])
-      .then(([wrR, solR]) => { setWr(wrR.data); setSolleciti(solR.data); })
+    Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/solleciti`), axios.get(`${API}/wr-nascoste`)])
+      .then(([wrR, solR, nasR]) => { setWr(wrR.data); setSolleciti(solR.data); setWrNascoste(nasR.data.lista || []); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [API]);
@@ -341,6 +342,20 @@ export default function Pratiche() {
 
   if (loading) return <div style={{ padding: 40, color: 'var(--muted)', textAlign: 'center' }}>Caricamento...</div>;
 
+  const toggleNascondi = async (wrNum) => {
+    const wrStr = String(wrNum);
+    const isNascosta = wrNascoste.includes(wrStr);
+    try {
+      if (isNascosta) {
+        await axios.delete(`${API}/wr-nascoste/${wrStr}`);
+        setWrNascoste(prev => prev.filter(w => w !== wrStr));
+      } else {
+        await axios.post(`${API}/wr-nascoste/${wrStr}`);
+        setWrNascoste(prev => [...prev, wrStr]);
+      }
+    } catch(e) { console.error(e); }
+  };
+
   const selectStyle = {
     background: 'var(--panel)', border: '1px solid var(--border)',
     color: 'var(--text)', padding: '5px 8px', borderRadius: 6, fontSize: 12, outline: 'none'
@@ -387,6 +402,7 @@ export default function Pratiche() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
             <tr style={{ background: '#1a1f2e' }}>
+              <th style={{ padding: '9px 8px', borderBottom: '1px solid var(--border)', fontSize:11, color:'var(--muted)', whiteSpace:'nowrap', textAlign:'center' }} title="Visibile ai sub">👁</th>
               {COLONNE.map(col => (
                 <th key={col.key} onClick={() => handleSort(col.key)}
                   style={{ padding: '9px 12px', textAlign: 'left', fontSize: 11, color: sortCol === col.key ? 'var(--accent)' : 'var(--muted)', fontWeight: 500, cursor: 'pointer', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap', userSelect: 'none' }}>
@@ -405,6 +421,11 @@ export default function Pratiche() {
                   onMouseEnter={e => e.currentTarget.style.background = old ? 'rgba(239,68,68,0.1)' : 'rgba(59,130,246,0.06)'}
                   onMouseLeave={e => e.currentTarget.style.background = old ? 'rgba(239,68,68,0.04)' : 'transparent'}
                 >
+                  <td style={{ padding:'4px 8px', textAlign:'center' }} onClick={e => { e.stopPropagation(); toggleNascondi(w.WR); }}>
+                    <div style={{ width:18, height:18, border:`2px solid ${wrNascoste.includes(String(w.WR)) ? '#ef4444' : '#22c55e'}`, borderRadius:3, background: wrNascoste.includes(String(w.WR)) ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', margin:'0 auto' }}>
+                      {!wrNascoste.includes(String(w.WR)) && <span style={{ fontSize:11, color:'#22c55e', fontWeight:700 }}>✓</span>}
+                    </div>
+                  </td>
                   {COLONNE.map(col => (
                     <td key={col.key} style={{
                       padding: '7px 12px',

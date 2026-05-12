@@ -14,7 +14,13 @@ export function AuthProvider({ children }) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       axios.get(`${API}/me`)
         .then(r => setUser(r.data))
-        .catch(() => localStorage.removeItem('token'))
+        .catch(err => {
+          // Rimuovi token solo se è scaduto (401), non per errori di rete
+          if (err.response?.status === 401) {
+            localStorage.removeItem('token');
+          }
+          // Altrimenti mantieni il token e riprova al prossimo refresh
+        })
         .finally(() => setLoading(false));
     } else {
       setLoading(false);

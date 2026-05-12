@@ -5,4 +5,4 @@ httpx==0.25.2
 python-dotenv==1.0.0
 motor==3.3.2
 pydantic==2.5.0
-pymssql==2.3.1
+pymssql

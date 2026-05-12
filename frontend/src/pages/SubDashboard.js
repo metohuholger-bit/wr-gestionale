@@ -579,7 +579,9 @@ function SollicitiPopup({ solleciti, wr, onClose, onSelectWR }) {
 
 
 // ── MOBILE LAYOUT ──
-function SubDashboardMobile({ wr, miniSquadre, solleciti, setSolleciti, setMiniSquadre, subCode, API, user, logout, navigate, previewMode }) {
+function SubDashboardMobile({ wr, miniSquadre, solleciti, setSolleciti, setMiniSquadre, subCode, API, previewMode }) {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('pratiche'); // pratiche | squadre | mappa
   const [showFiltri, setShowFiltri] = useState(false);
   const [search, setSearch] = useState('');
@@ -821,6 +823,7 @@ export default function SubDashboard({ previewMode }) {
   const [filtroComune, setFiltroComune] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
   const [filtroCard, setFiltroCard] = useState(null);
+  const [search, setSearch] = useState('');
   const [multiWR, setMultiWR] = useState('');
   const [showMultiWR, setShowMultiWR] = useState(false); // null | 'over90' | 'avvicin' | 'urgenti'
   const [colFilter, setColFilter] = useState({ WR:'', StatoWR:'', Centrale:'', Desc_Centrale:'', Discriminante:'', Indirizzo:'', Localita:'', Pali:'', JobType:'', Assistente:'' });
@@ -971,8 +974,7 @@ export default function SubDashboard({ previewMode }) {
     <SubDashboardMobile
       wr={wr} miniSquadre={miniSquadre} solleciti={solleciti}
       setSolleciti={setSolleciti} setMiniSquadre={setMiniSquadre}
-      subCode={subCode} API={API} user={user} logout={logout}
-      navigate={navigate} previewMode={previewMode}
+      subCode={subCode} API={API} previewMode={previewMode}
     />
   );
 

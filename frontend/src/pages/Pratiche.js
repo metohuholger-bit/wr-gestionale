@@ -7,6 +7,7 @@ const COLONNE = [
   { key: 'Sq', label: 'Squadra' },
   { key: 'StatoWR', label: 'Stato' },
   { key: 'Datadispaccio', label: 'Data' },
+  { key: 'Discriminante', label: 'Discriminante' },
   { key: 'Centrale', label: 'Centrale' },
   { key: 'Indirizzo', label: 'Indirizzo' },
   { key: 'Localita', label: 'Località' },

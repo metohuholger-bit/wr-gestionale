@@ -17,6 +17,7 @@ const NAV = [
   { title: 'GESTIONE', items: [
     { to: '/admin/sub', label: 'Sub e squadre', icon: '⬡' },
     { to: '/admin/utenti', label: 'Utenti', icon: '⊙' },
+    { to: '/admin/impostazioni', label: 'Impostazioni', icon: '⚙' },
   ]}
 ];
 

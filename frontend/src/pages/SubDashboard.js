@@ -230,35 +230,29 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, opacity: 0.7 }).addTo(map);
       const bounds = [];
-      // Conta quante WR hanno le stesse coordinate per applicare offset
+      // Calcola offset per marker sovrapposti
       const coordCount = {};
-      wr.forEach(w => {
-        const lat = parseFloat(w.Latitudine) || parseFloat(w.LatInferita);
-        const lon = parseFloat(w.Longitudine) || parseFloat(w.LonInferita);
-        if (!lat || !lon || isNaN(lat) || isNaN(lon)) return;
-        const key = `${lat.toFixed(6)},${lon.toFixed(6)}`;
-        coordCount[key] = (coordCount[key] || 0) + 1;
-      });
       const coordIndex = {};
       wr.forEach(w => {
         const lat = parseFloat(w.Latitudine) || parseFloat(w.LatInferita);
         const lon = parseFloat(w.Longitudine) || parseFloat(w.LonInferita);
         if (!lat || !lon || isNaN(lat) || isNaN(lon)) return;
-        const key = `${lat.toFixed(6)},${lon.toFixed(6)}`;
-        if (!coordIndex[key]) coordIndex[key] = 0;
-        // Applica offset circolare se ci sono più marker nella stessa posizione
-        const idx = coordIndex[key]++;
-        const total = coordCount[key];
-        const angle = (2 * Math.PI * idx) / total;
-        const offsetDist = total > 1 ? 0.00008 : 0;
-        w._lat = lat + offsetDist * Math.cos(angle);
-        w._lon = lon + offsetDist * Math.sin(angle);
-        w._sovrapposto = total > 1;
+        const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+        coordCount[key] = (coordCount[key] || 0) + 1;
       });
       wr.forEach(w => {
-        const lat = w._lat || parseFloat(w.Latitudine) || parseFloat(w.LatInferita);
-        const lon = w._lon || parseFloat(w.Longitudine) || parseFloat(w.LonInferita);
-        if (!lat || !lon || isNaN(lat) || isNaN(lon)) return;
+        const latOrig = parseFloat(w.Latitudine) || parseFloat(w.LatInferita);
+        const lonOrig = parseFloat(w.Longitudine) || parseFloat(w.LonInferita);
+        if (!latOrig || !lonOrig || isNaN(latOrig) || isNaN(lonOrig)) return;
+        const key = `${latOrig.toFixed(5)},${lonOrig.toFixed(5)}`;
+        const total = coordCount[key] || 1;
+        if (!coordIndex[key]) coordIndex[key] = 0;
+        const idx = coordIndex[key]++;
+        const angle = (2 * Math.PI * idx) / total;
+        const offsetDist = total > 1 ? 0.0001 : 0;
+        const lat = latOrig + offsetDist * Math.cos(angle);
+        const lon = lonOrig + offsetDist * Math.sin(angle);
+        const sovrapposto = total > 1;
         const isInferred = !!w.CoordInferita;
         const isAssigned = !!wrToSquadra[String(w.WR)];
         const color = wrToSquadra[String(w.WR)]?.color || (isInferred ? '#94a3b8' : '#3b82f6');
@@ -269,7 +263,7 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
           color: isInferred ? '#f59e0b' : 'white',
           weight: isAssigned ? 3 : 2,
           fillOpacity: isInferred ? 0.6 : 0.9
-        }).addTo(map).bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:${color}">WR ${w.WR}</b><br/>${w.Indirizzo||''}, ${w.Localita||''}<br/>Stato: <b>${w.StatoWR}</b>${sqNome ? `<br/><span style="color:${color}">■ ${sqNome}</span>` : ''}${isInferred ? '<br/><span style="color:#f59e0b">⚠ Posizione approssimativa</span>' : ''}</div>`);
+        }).addTo(map).bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:${color}">WR ${w.WR}</b><br/>${w.Indirizzo||''}, ${w.Localita||''}<br/>Stato: <b>${w.StatoWR}</b>${sqNome ? `<br/><span style="color:${color}">■ ${sqNome}</span>` : ''}${isInferred ? '<br/><span style="color:#f59e0b">⚠ Posizione approssimativa</span>' : ''}${sovrapposto ? '<br/><span style="color:#94a3b8">📍 Stesso punto di altra WR</span>' : ''}</div>`);
         if (!isAssigned) marker.on('click', () => toggleSelect(String(w.WR)));
         markersRef.current[String(w.WR)] = marker;
         bounds.push([lat, lon]);

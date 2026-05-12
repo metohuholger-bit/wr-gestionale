@@ -347,27 +347,6 @@ async def migra_solleciti(user=Depends(get_current_user)):
     return {"migrati": migrati}
 
 
-# ── SQL SERVER TEST ──
-@app.get("/admin/sql-test")
-async def sql_test(user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403)
-    try:
-        import pymssql
-        host = os.getenv("MSSQL_HOST", "")
-        port = int(os.getenv("MSSQL_PORT", "1433"))
-        db = os.getenv("MSSQL_DB", "")
-        usr = os.getenv("MSSQL_USER", "")
-        pwd = os.getenv("MSSQL_PASS", "")
-        conn = pymssql.connect(server=host, port=port, database=db, user=usr, password=pwd, timeout=10)
-        cursor = conn.cursor(as_dict=True)
-        cursor.execute("SELECT TOP 10 * FROM vw_CoordinateSIM")
-        rows = cursor.fetchall()
-        conn.close()
-        return {"ok": True, "rows": rows, "count": len(rows)}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
 # ── IMPOSTAZIONI ──
 @app.get("/impostazioni")
 async def get_impostazioni(user=Depends(get_current_user)):

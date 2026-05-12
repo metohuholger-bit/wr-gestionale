@@ -166,6 +166,14 @@ async def get_wr(user=Depends(get_current_user)):
     # Filtra per ruolo usando colonna "Sq"
     if user["role"] == "sub":
         rows = [r for r in rows if r.get("Sq") == user.get("sub_code")]
+        # Nascondi WR con discriminante configurato
+        impostazioni = await db.impostazioni.find_one({}, {"_id": 0})
+        parole_nascoste = [p.lower().strip() for p in (impostazioni or {}).get("discriminante_nascondi", []) if p.strip()]
+        if parole_nascoste:
+            def discriminante_nascosto(r):
+                disc = (r.get("Discriminante") or "").lower()
+                return any(p in disc for p in parole_nascoste)
+            rows = [r for r in rows if not discriminante_nascosto(r)]
     elif user["role"] == "squad":
         sq = await db.mini_squadre.find_one({"link_token": user.get("squad_token")})
         if sq:
@@ -337,6 +345,21 @@ async def migra_solleciti(user=Depends(get_current_user)):
             )
             migrati += 1
     return {"migrati": migrati}
+
+# ── IMPOSTAZIONI ──
+@app.get("/impostazioni")
+async def get_impostazioni(user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    doc = await db.impostazioni.find_one({}, {"_id": 0})
+    return doc or {"discriminante_nascondi": []}
+
+@app.post("/impostazioni")
+async def save_impostazioni(data: dict, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    await db.impostazioni.update_one({}, {"$set": data}, upsert=True)
+    return {"ok": True}
 
 # ── VIEW PUBBLICA (no auth) ──
 @app.get("/view/{token}")

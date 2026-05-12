@@ -6,6 +6,7 @@ import Pratiche from './Pratiche';
 import SubSquadre from './SubSquadre';
 import SubDashboard from './SubDashboard';
 import Utenti from './Utenti';
+import Impostazioni from './Impostazioni';
 
 const NAV = [
   { title: 'PRINCIPALE', items: [
@@ -679,6 +680,7 @@ export default function AdminDashboard() {
             <Route path="/vista-sub" element={<VistaSub />} />
             <Route path="/sub" element={<SubSquadre />} />
             <Route path="/utenti" element={<Utenti />} />
+            <Route path="/impostazioni" element={<Impostazioni />} />
             <Route path="/link" element={<div style={{ padding:24, color:'var(--muted)' }}>Link attivi — in sviluppo</div>} />
           </Routes>
         </div>

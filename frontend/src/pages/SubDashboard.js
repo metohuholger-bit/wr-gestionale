@@ -244,7 +244,7 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
         const lat = parseFloat(w.Latitudine) || parseFloat(w.LatInferita);
         const lon = parseFloat(w.Longitudine) || parseFloat(w.LonInferita);
         if (!lat || !lon || isNaN(lat) || isNaN(lon)) return;
-        const key = `\${lat.toFixed(6)},\${lon.toFixed(6)}`;
+        const key = `${lat.toFixed(6)},${lon.toFixed(6)}`;
         if (!coordIndex[key]) coordIndex[key] = 0;
         // Applica offset circolare se ci sono più marker nella stessa posizione
         const idx = coordIndex[key]++;

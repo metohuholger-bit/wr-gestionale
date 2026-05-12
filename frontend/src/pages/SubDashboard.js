@@ -8,31 +8,48 @@ const STATI_ESCLUSI = ['NUOVA'];
 function PopupWR({ w, onClose }) {
   const lat = parseFloat(w.Latitudine);
   const lon = parseFloat(w.Longitudine);
+  const [showFullNote, setShowFullNote] = React.useState(false);
+  const NOTE_MAX = 200;
+
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, width: 440, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, width: '100%', maxWidth: 440, maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
           <div>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 16, fontWeight: 600, color: 'var(--accent)' }}>WR {w.WR}</div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{w.Datadispaccio}</div>
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>×</button>
         </div>
-        <div style={{ padding: '16px 20px' }}>
+        <div style={{ padding: '16px 20px', overflow: 'auto', flex: 1 }}>
           {[
             ['Stato', w.StatoWR], ['Tipo', w.JobType],
             ['Centrale', w.Desc_Centrale || w.Centrale],
             ['Indirizzo', `${w.Indirizzo || ''}${w.Localita ? ', '+w.Localita : ''}`],
             ['Assistente', w.Assistente], ['Recapito', w.Recapito],
-            ['N° Pali', w.Pali], ['Note', w.Note],
+            ['N° Pali', w.Pali], ['Discriminante', w.Discriminante],
           ].filter(([,v]) => v && v.trim()).map(([label, val], i) => (
             <div key={i} style={{ display: 'flex', gap: 12, marginBottom: 8, fontSize: 13 }}>
-              <span style={{ color: 'var(--muted)', minWidth: 100, fontSize: 12 }}>{label}</span>
+              <span style={{ color: 'var(--muted)', minWidth: 100, fontSize: 12, flexShrink: 0 }}>{label}</span>
               <span style={{ color: 'var(--text)' }}>{val}</span>
             </div>
           ))}
+          {w.Note && w.Note.trim() && (
+            <div style={{ display: 'flex', gap: 12, marginBottom: 8, fontSize: 13 }}>
+              <span style={{ color: 'var(--muted)', minWidth: 100, fontSize: 12, flexShrink: 0 }}>Note</span>
+              <div style={{ color: 'var(--text)', flex: 1 }}>
+                <span>{showFullNote || w.Note.length <= NOTE_MAX ? w.Note : w.Note.slice(0, NOTE_MAX) + '...'}</span>
+                {w.Note.length > NOTE_MAX && (
+                  <button onClick={() => setShowFullNote(!showFullNote)}
+                    style={{ display: 'block', marginTop: 4, background: 'transparent', border: 'none', color: 'var(--accent)', fontSize: 11, cursor: 'pointer', padding: 0 }}>
+                    {showFullNote ? '▲ Mostra meno' : '▼ Mostra tutto'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
-        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10 }}>
+        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, flexShrink: 0 }}>
           {lat && lon && !isNaN(lat) && !isNaN(lon) && (
             <a href={`https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`} target="_blank" rel="noreferrer"
               style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', color: 'var(--green)', padding: '8px 14px', borderRadius: 7, fontSize: 13, textDecoration: 'none' }}>

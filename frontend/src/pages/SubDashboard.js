@@ -328,25 +328,17 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
           </div>
 
           {/* Badge categorie discriminante */}
-          {solleciti && categorie && categorie.length > 0 && (() => {
-            const badgesVisibili = categorie.filter(cat => {
-              try { return wr.some(w => new RegExp(cat.pattern, 'i').test(w.Discriminante || '')); } catch(e) { return false; }
-            });
-            if (badgesVisibili.length === 0) return null;
+          {categorie && categorie.filter(cat => {
+            try { return wr.some(w => new RegExp(cat.pattern, 'i').test(w.Discriminante || '')); } catch(e) { return false; }
+          }).map((cat, i) => {
+            const isActive = filtroCategoriaMappa === cat.pattern;
             return (
-              <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
-                {badgesVisibili.map((cat, i) => {
-                  const isActive = filtroCategoriaMappa === cat.pattern;
-                  return (
-                    <button key={i} onClick={() => setFiltroCategoriaMappa(isActive ? null : cat.pattern)}
-                      style={{ padding:'3px 8px', borderRadius:4, border:`1px solid ${cat.colore}`, background: isActive ? `${cat.colore}33` : 'transparent', color:cat.colore, fontSize:10, cursor:'pointer', fontWeight: isActive ? 700 : 400 }}>
-                      {cat.emoji} {cat.nome}
-                    </button>
-                  );
-                })}
-              </div>
+              <button key={i} onClick={() => setFiltroCategoriaMappa(isActive ? null : cat.pattern)}
+                style={{ padding:'3px 8px', borderRadius:4, border:`1px solid ${cat.colore}`, background: isActive ? `${cat.colore}33` : 'transparent', color:cat.colore, fontSize:10, cursor:'pointer', fontWeight: isActive ? 700 : 400 }}>
+                {cat.emoji} {cat.nome}
+              </button>
             );
-          })()}
+          })}
           {/* Legenda mini-squadre */}
           {miniSquadre.length > 0 && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

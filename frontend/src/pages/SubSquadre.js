@@ -10,6 +10,7 @@ export default function SubSquadre() {
   const [expandedSub, setExpandedSub] = useState({});
   const [expandedSq, setExpandedSq] = useState({});
   const [selectedWR, setSelectedWR] = useState(null);
+  const [lavorazioni, setLavorazioni] = useState({});
 
   useEffect(() => {
     Promise.all([
@@ -50,7 +51,14 @@ export default function SubSquadre() {
   const allSubs = [...new Set([...Object.keys(wrBySub), ...Object.keys(sqBySub)])].sort();
 
   const toggleSub = (cod) => setExpandedSub(p => ({ ...p, [cod]: !p[cod] }));
-  const toggleSq = (tok) => setExpandedSq(p => ({ ...p, [tok]: !p[tok] }));
+  const toggleSq = (tok) => {
+    setExpandedSq(p => ({ ...p, [tok]: !p[tok] }));
+    if (!lavorazioni[tok]) {
+      axios.get(`${API}/lavorazioni/${tok}`)
+        .then(r => setLavorazioni(prev => ({ ...prev, [tok]: r.data })))
+        .catch(() => {});
+    }
+  };
 
   if (loading) return <div style={{ padding: 40, color: 'var(--muted)', textAlign: 'center' }}>Caricamento...</div>;
 
@@ -155,9 +163,12 @@ export default function SubSquadre() {
                             ? <div style={{ fontSize: 12, color: 'var(--muted)' }}>Nessuna WR assegnata</div>
                             : sqWrs.map((w, i) => (
                               <div key={i} onClick={() => setSelectedWR(w)}
-                                style={{ display: 'flex', gap: 10, padding: '5px 0', borderBottom: '1px solid var(--border)', cursor: 'pointer', alignItems: 'center' }}>
-                                <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', minWidth: 80 }}>{w.WR}</span>
-                                <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.Indirizzo}, {w.Localita}</span>
+                                style={{ display: 'flex', gap: 10, padding: '5px 0', borderBottom: '1px solid var(--border)', cursor: 'pointer', alignItems: 'center', background: lavorazioni[sq.link_token]?.some(l => l.wr === String(w.WR)) ? 'rgba(34,197,94,0.04)' : 'transparent' }}>
+                                <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: lavorazioni[sq.link_token]?.some(l => l.wr === String(w.WR)) ? '#22c55e' : 'var(--accent)', minWidth: 80, textDecoration: lavorazioni[sq.link_token]?.some(l => l.wr === String(w.WR)) ? 'line-through' : 'none' }}>{w.WR}</span>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.Indirizzo}, {w.Localita}</div>
+                                  {(() => { const lav = lavorazioni[sq.link_token]?.find(l => l.wr === String(w.WR)); return lav?.nota ? <div style={{ fontSize: 10, color: '#f59e0b', fontStyle: 'italic' }}>📝 {lav.nota}</div> : null; })()}
+                                </div>
                                 <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: isOld(w.Datadispaccio) ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)', color: isOld(w.Datadispaccio) ? 'var(--red)' : 'var(--green)', flexShrink: 0 }}>
                                   {isOld(w.Datadispaccio) ? '+90gg' : w.StatoWR}
                                 </span>

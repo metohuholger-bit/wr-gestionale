@@ -80,13 +80,13 @@ async def google_auth(req: GoogleAuthRequest):
 
     user = await db.users.find_one({"email": email})
     if not user:
-        # Primo accesso — crea utente come "pending" (admin deve approvare)
-        # oppure auto-assegna ruolo in base a logica custom
+        # Auto-admin per email @mdsimpianti.com, pending per tutti gli altri
+        auto_role = "admin" if email.endswith("@mdsimpianti.com") else "pending"
         user_data = {
             "email": email,
             "name": info.get("name", ""),
             "picture": info.get("picture", ""),
-            "role": "pending",
+            "role": auto_role,
             "sub_code": None,
             "created_at": datetime.utcnow()
         }
@@ -409,6 +409,47 @@ async def save_impostazioni(data: dict, user=Depends(get_current_user)):
         raise HTTPException(status_code=403)
     await db.impostazioni.update_one({}, {"$set": data}, upsert=True)
     return {"ok": True}
+
+
+# ── LAVORAZIONI SQUADRA ──
+class Lavorazione(BaseModel):
+    token: str
+    wr: str
+    nota: Optional[str] = ""
+
+@app.get("/lavorazioni/{token}")
+async def get_lavorazioni(token: str):
+    cursor = db.lavorazioni.find({"token": token}, {"_id": 0})
+    return await cursor.to_list(length=500)
+
+@app.post("/lavorazioni")
+async def set_lavorazione(data: Lavorazione):
+    existing = await db.lavorazioni.find_one({"token": data.token, "wr": data.wr})
+    if existing:
+        # Toggle - rimuovi se già esiste
+        await db.lavorazioni.delete_one({"token": data.token, "wr": data.wr})
+        return {"ok": True, "action": "removed"}
+    else:
+        await db.lavorazioni.insert_one({
+            "token": data.token, "wr": data.wr,
+            "nota": data.nota, "data": datetime.utcnow()
+        })
+        return {"ok": True, "action": "added"}
+
+@app.put("/lavorazioni/{token}/{wr}/nota")
+async def update_nota(token: str, wr: str, data: dict):
+    await db.lavorazioni.update_one(
+        {"token": token, "wr": wr},
+        {"$set": {"nota": data.get("nota", "")}}
+    )
+    return {"ok": True}
+
+@app.get("/admin/lavorazioni/{token}")
+async def get_lavorazioni_admin(token: str, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    cursor = db.lavorazioni.find({"token": token}, {"_id": 0})
+    return await cursor.to_list(length=500)
 
 # ── VIEW PUBBLICA (no auth) ──
 @app.get("/view/{token}")

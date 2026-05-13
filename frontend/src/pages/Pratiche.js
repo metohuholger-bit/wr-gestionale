@@ -362,6 +362,17 @@ export default function Pratiche() {
     } catch(e) { console.error(e); }
   };
 
+  const exportCSV = () => {
+    const cols = COLONNE.map(c => c.label).join(',');
+    const rows = filtered.map(w => COLONNE.map(c => `"${(w[c.key]||'').toString().replace(/"/g,'""')}"`).join(','));
+    const csv = [cols, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'pratiche.csv'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const selectStyle = {
     background: 'var(--panel)', border: '1px solid var(--border)',
     color: 'var(--text)', padding: '5px 8px', borderRadius: 6, fontSize: 12, outline: 'none'
@@ -413,6 +424,9 @@ export default function Pratiche() {
             })}
           </div>
         )}
+        <button onClick={exportCSV} style={{ background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.3)', color:'var(--green)', padding:'5px 10px', borderRadius:6, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' }}>
+          ⬇ CSV
+        </button>
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--muted)' }}>
           <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{filtered.length}</span> / {wr.length} WR
         </span>

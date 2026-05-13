@@ -202,6 +202,10 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
     } catch (e) { console.error(e); }
   };
 
+  const selectStyle = { background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 5, fontSize: 11, outline: 'none', width: '100%' };
+  const isMobileMap = window.innerWidth < 768;
+  const [showPanelMobile, setShowPanelMobile] = React.useState(false);
+
   // Aggiorna visibilità marker quando cambiano i filtri
   useEffect(() => {
     if (!mapInstanceRef.current) return;
@@ -298,10 +302,6 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
       if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; }
     };
   }, []);
-
-  const selectStyle = { background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 5, fontSize: 11, outline: 'none', width: '100%' };
-  const isMobileMap = window.innerWidth < 768;
-  const [showPanelMobile, setShowPanelMobile] = React.useState(false);
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

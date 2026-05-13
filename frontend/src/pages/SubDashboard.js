@@ -943,12 +943,13 @@ export default function SubDashboard({ previewMode }) {
       setLoading(true);
       Promise.all([
         axios.get(`${API}/mini-squadre?sub_code=${previewMode.subCode}`),
-        axios.get(`${API}/solleciti`)
-      ]).then(([sqR, solR]) => {
+        axios.get(`${API}/solleciti`),
+        axios.get(`${API}/categorie-discriminante`)
+      ]).then(([sqR, solR, catR]) => {
         setMiniSquadre(sqR.data);
         const filtered = solR.data.filter(s => String(s.sub_code).trim() === String(previewMode.subCode).trim());
-        console.log('Solleciti totali:', solR.data.length, 'filtrati per', previewMode.subCode, ':', filtered.length);
         setSolleciti(filtered);
+        setCategorie(catR.data.categorie || []);
       }).catch(e => console.error('Errore caricamento preview:', e))
       .finally(() => setLoading(false));
       return;

@@ -63,7 +63,7 @@ function PopupWR({ w, onClose }) {
   );
 }
 
-function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadre, solleciti, categorie }) {
+function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadre, solleciti }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef({});
@@ -110,9 +110,6 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
     if (filtroSquadra) {
       const sq = wrToSquadra[String(w.WR)];
       if (!sq || sq.token !== filtroSquadra) return false;
-    }
-    if (filtroCategoriaMappa) {
-      try { if (!new RegExp(filtroCategoriaMappa, 'i').test(w.Discriminante || '')) return false; } catch(e) {}
     }
     if (filtroDiscriminante && !w.Discriminante?.toLowerCase().includes(filtroDiscriminante.toLowerCase())) return false;
     if (searchWR) {
@@ -202,10 +199,6 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
     } catch (e) { console.error(e); }
   };
 
-  const selectStyle = { background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 5, fontSize: 11, outline: 'none', width: '100%' };
-  const isMobileMap = window.innerWidth < 768;
-  const [showPanelMobile, setShowPanelMobile] = React.useState(false);
-
   // Aggiorna visibilità marker quando cambiano i filtri
   useEffect(() => {
     if (!mapInstanceRef.current) return;
@@ -221,13 +214,10 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
       if (filtroExtra === 'avvicin') { const d = ddiff(w.Datadispaccio); if (d === null || d <= 60 || d > 90) visible = false; }
       if (filtroMiniSquadra === '__assegnate__' && !wrToSquadra[wrNum]) visible = false;
       if (filtroMiniSquadra && filtroMiniSquadra !== '__assegnate__') { const sq = wrToSquadra[wrNum]; if (!sq || sq.token !== filtroMiniSquadra) visible = false; }
-      if (filtroCategoriaMappa) {
-        try { if (!new RegExp(filtroCategoriaMappa, 'i').test(w.Discriminante || '')) visible = false; } catch(e) {}
-      }
       if (filtroDiscriminante && !w.Discriminante?.toLowerCase().includes(filtroDiscriminante.toLowerCase())) visible = false;
       if (typeof marker.setStyle === 'function') marker.setStyle({ opacity: visible ? 1 : 0.05, fillOpacity: visible ? 0.9 : 0.05 });
     });
-  }, [filtroSquadra, filtroCentrale, filtroComune, filtroExtra, filtroMiniSquadra, solleciti, filtroDiscriminante, filtroCategoriaMappa]);
+  }, [filtroSquadra, filtroCentrale, filtroComune, filtroExtra, filtroMiniSquadra, solleciti, filtroDiscriminante]);
 
   // Inizializza mappa
   useEffect(() => {
@@ -303,6 +293,10 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
     };
   }, []);
 
+  const selectStyle = { background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 5, fontSize: 11, outline: 'none', width: '100%' };
+  const isMobileMap = window.innerWidth < 768;
+  const [showPanelMobile, setShowPanelMobile] = React.useState(false);
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: isMobileMap ? '100vw' : '95vw', height: isMobileMap ? '100vh' : '90vh', background: 'var(--panel)', borderRadius: isMobileMap ? 0 : 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -327,18 +321,6 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
             ))}
           </div>
 
-          {/* Badge categorie discriminante */}
-          {categorie && categorie.filter(cat => {
-            try { return wr.some(w => new RegExp(cat.pattern, 'i').test(w.Discriminante || '')); } catch(e) { return false; }
-          }).map((cat, i) => {
-            const isActive = filtroCategoriaMappa === cat.pattern;
-            return (
-              <button key={i} onClick={() => setFiltroCategoriaMappa(isActive ? null : cat.pattern)}
-                style={{ padding:'3px 8px', borderRadius:4, border:`1px solid ${cat.colore}`, background: isActive ? `${cat.colore}33` : 'transparent', color:cat.colore, fontSize:10, cursor:'pointer', fontWeight: isActive ? 700 : 400 }}>
-                {cat.emoji} {cat.nome}
-              </button>
-            );
-          })}
           {/* Legenda mini-squadre */}
           {miniSquadre.length > 0 && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -654,7 +636,6 @@ function SubDashboardMobile({ wr, miniSquadre, solleciti, setSolleciti, setMiniS
   const [selectedWR, setSelectedWR] = useState(null);
   const [showMappa, setShowMappa] = useState(false);
   const [storicoWR, setStoricoWR] = useState(null);
-  const [lavorazioni, setLavorazioni] = useState({});
   const [showSolleciti, setShowSolleciti] = useState(false);
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [nomeNuovaSquadra, setNomeNuovaSquadra] = useState('');
@@ -718,7 +699,7 @@ function SubDashboardMobile({ wr, miniSquadre, solleciti, setSolleciti, setMiniS
       {selectedWR && <PopupWR w={selectedWR} onClose={() => setSelectedWR(null)} />}
       {storicoWR && <StoricoSolleciti wr={storicoWR} solleciti={solleciti} setSolleciti={setSolleciti} API={API} onClose={() => setStoricoWR(null)} />}
       {showSolleciti && <SollicitiPopup solleciti={solleciti} wr={wr} onClose={() => setShowSolleciti(false)} onSelectWR={w => { setSelectedWR(w); }} />}
-      {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} subCode={subCode} miniSquadre={miniSquadre} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} solleciti={solleciti} categorie={categorie} />}
+      {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} subCode={subCode} miniSquadre={miniSquadre} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} solleciti={solleciti} />}
 
       {/* Topbar */}
       <div style={{ background:'var(--panel)', borderBottom:'1px solid var(--border)', padding:'0 12px', height:44, display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
@@ -902,7 +883,6 @@ export default function SubDashboard({ previewMode }) {
   const [showSolleciti, setShowSolleciti] = useState(false);
   const [showConfronta, setShowConfronta] = useState(false);
   const [storicoWR, setStoricoWR] = useState(null);
-  const [lavorazioni, setLavorazioni] = useState({});
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   useEffect(() => {
@@ -937,13 +917,12 @@ export default function SubDashboard({ previewMode }) {
       setLoading(true);
       Promise.all([
         axios.get(`${API}/mini-squadre?sub_code=${previewMode.subCode}`),
-        axios.get(`${API}/solleciti`),
-        axios.get(`${API}/categorie-discriminante`)
-      ]).then(([sqR, solR, catR]) => {
+        axios.get(`${API}/solleciti`)
+      ]).then(([sqR, solR]) => {
         setMiniSquadre(sqR.data);
         const filtered = solR.data.filter(s => String(s.sub_code).trim() === String(previewMode.subCode).trim());
+        console.log('Solleciti totali:', solR.data.length, 'filtrati per', previewMode.subCode, ':', filtered.length);
         setSolleciti(filtered);
-        setCategorie(catR.data.categorie || []);
       }).catch(e => console.error('Errore caricamento preview:', e))
       .finally(() => setLoading(false));
       return;
@@ -956,16 +935,6 @@ export default function SubDashboard({ previewMode }) {
         setCategorie(catR.data.categorie || []);
       }).catch(() => {}).finally(() => setLoading(false));
   }, [API, previewMode?.subCode]);
-
-  // Carica lavorazioni per ogni mini-squadra
-  useEffect(() => {
-    if (miniSquadre.length === 0) return;
-    miniSquadre.forEach(sq => {
-      axios.get(`${API}/lavorazioni/${sq.link_token}`)
-        .then(r => setLavorazioni(prev => ({ ...prev, [sq.link_token]: r.data })))
-        .catch(() => {});
-    });
-  }, [API, miniSquadre]);
 
   // Ricarica solleciti ogni 2 minuti
   useEffect(() => {
@@ -1094,7 +1063,7 @@ export default function SubDashboard({ previewMode }) {
       {storicoWR && <StoricoSolleciti wr={storicoWR} solleciti={solleciti} setSolleciti={setSolleciti} API={API} onClose={() => setStoricoWR(null)} />}
       {showConfronta && selectedRows.size === 2 && (() => { const [a,b] = [...selectedRows]; const wrA = wr.find(w=>String(w.WR)===a); const wrB = wr.find(w=>String(w.WR)===b); return wrA && wrB ? <ConfrontaWR wrA={wrA} wrB={wrB} onClose={() => setShowConfronta(false)} /> : null; })()}
       {showSolleciti && <SollicitiPopup solleciti={solleciti} wr={wr} onClose={() => setShowSolleciti(false)} onSelectWR={w => { setSelectedWR(w); setActiveTab('pratiche'); }} />}
-      {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} subCode={subCode} miniSquadre={miniSquadre} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} solleciti={solleciti} categorie={categorie} />}
+      {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} subCode={subCode} miniSquadre={miniSquadre} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} solleciti={solleciti} />}
       {selectedWR && <PopupWR w={selectedWR} onClose={() => setSelectedWR(null)} />}
 
       {/* Topbar */}
@@ -1348,41 +1317,14 @@ export default function SubDashboard({ previewMode }) {
                       </button>
                     </div>
                     <div style={{ padding: '8px 16px' }}>
-                      {/* Progress lavorazioni */}
-                      {lavorazioni[sq.link_token] && (() => {
-                        const lav = lavorazioni[sq.link_token];
-                        const pct = sqWrs.length > 0 ? (lav.length / sqWrs.length) * 100 : 0;
-                        return (
-                          <div style={{ marginBottom: 8 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginBottom: 3 }}>
-                              <span>Avanzamento squadra</span>
-                              <span style={{ color: '#22c55e', fontWeight: 600 }}>{lav.length}/{sqWrs.length} lavorate</span>
-                            </div>
-                            <div style={{ height: 5, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: `${pct}%`, background: '#22c55e', borderRadius: 3, transition: 'width 0.5s' }} />
-                            </div>
-                          </div>
-                        );
-                      })()}
-                      {sqWrs.map((w, i) => w && (() => {
-                        const lavorata = lavorazioni[sq.link_token]?.some(l => l.wr === String(w.WR));
-                        const notaDoc = lavorazioni[sq.link_token]?.find(l => l.wr === String(w.WR));
-                        return (
-                          <div key={i} onClick={() => setSelectedWR(w)}
-                            style={{ padding: '5px 0', borderBottom: '1px solid var(--border)', cursor: 'pointer', background: lavorata ? 'rgba(34,197,94,0.04)' : 'transparent' }}>
-                            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                              <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: lavorata ? '#22c55e' : 'var(--accent)', minWidth: 80, textDecoration: lavorata ? 'line-through' : 'none' }}>{w.WR}</span>
-                              <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.Indirizzo}, {w.Localita}</span>
-                              {lavorata && <span style={{ fontSize: 10, color: '#22c55e', flexShrink: 0 }}>✓</span>}
-                              <button onClick={e => { e.stopPropagation(); removeWR(sq.link_token, String(w.WR)); }}
-                                style={{ background: 'transparent', border: 'none', color: 'var(--red)', fontSize: 14, cursor: 'pointer' }}>×</button>
-                            </div>
-                            {notaDoc?.nota && (
-                              <div style={{ fontSize: 10, color: '#f59e0b', fontStyle: 'italic', paddingLeft: 90 }}>📝 {notaDoc.nota}</div>
-                            )}
-                          </div>
-                        );
-                      })())}
+                      {sqWrs.map((w, i) => w && (
+                        <div key={i} onClick={() => setSelectedWR(w)} style={{ display: 'flex', gap: 10, padding: '5px 0', borderBottom: '1px solid var(--border)', cursor: 'pointer', alignItems: 'center' }}>
+                          <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', minWidth: 80 }}>{w.WR}</span>
+                          <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.Indirizzo}, {w.Localita}</span>
+                          <button onClick={e => { e.stopPropagation(); removeWR(sq.link_token, String(w.WR)); }}
+                            style={{ background: 'transparent', border: 'none', color: 'var(--red)', fontSize: 14, cursor: 'pointer' }}>×</button>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 );

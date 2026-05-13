@@ -63,7 +63,7 @@ function PopupWR({ w, onClose }) {
   );
 }
 
-function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadre, solleciti, categorie }) {
+function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadre, solleciti }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef({});
@@ -110,9 +110,6 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
     if (filtroSquadra) {
       const sq = wrToSquadra[String(w.WR)];
       if (!sq || sq.token !== filtroSquadra) return false;
-    }
-    if (filtroCategoriaMappa) {
-      try { if (!new RegExp(filtroCategoriaMappa, 'i').test(w.Discriminante || '')) return false; } catch(e) {}
     }
     if (filtroDiscriminante && !w.Discriminante?.toLowerCase().includes(filtroDiscriminante.toLowerCase())) return false;
     if (searchWR) {
@@ -217,13 +214,10 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
       if (filtroExtra === 'avvicin') { const d = ddiff(w.Datadispaccio); if (d === null || d <= 60 || d > 90) visible = false; }
       if (filtroMiniSquadra === '__assegnate__' && !wrToSquadra[wrNum]) visible = false;
       if (filtroMiniSquadra && filtroMiniSquadra !== '__assegnate__') { const sq = wrToSquadra[wrNum]; if (!sq || sq.token !== filtroMiniSquadra) visible = false; }
-      if (filtroCategoriaMappa) {
-        try { if (!new RegExp(filtroCategoriaMappa, 'i').test(w.Discriminante || '')) visible = false; } catch(e) {}
-      }
       if (filtroDiscriminante && !w.Discriminante?.toLowerCase().includes(filtroDiscriminante.toLowerCase())) visible = false;
       if (typeof marker.setStyle === 'function') marker.setStyle({ opacity: visible ? 1 : 0.05, fillOpacity: visible ? 0.9 : 0.05 });
     });
-  }, [filtroSquadra, filtroCentrale, filtroComune, filtroExtra, filtroMiniSquadra, solleciti, filtroDiscriminante, filtroCategoriaMappa]);
+  }, [filtroSquadra, filtroCentrale, filtroComune, filtroExtra, filtroMiniSquadra, solleciti, filtroDiscriminante]);
 
   // Inizializza mappa
   useEffect(() => {
@@ -327,18 +321,6 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
             ))}
           </div>
 
-          {/* Badge categorie discriminante */}
-          {categorie && categorie.filter(cat => {
-            try { return wr.some(w => new RegExp(cat.pattern, 'i').test(w.Discriminante || '')); } catch(e) { return false; }
-          }).map((cat, i) => {
-            const isActive = filtroCategoriaMappa === cat.pattern;
-            return (
-              <button key={i} onClick={() => setFiltroCategoriaMappa(isActive ? null : cat.pattern)}
-                style={{ padding:'3px 8px', borderRadius:4, border:`1px solid ${cat.colore}`, background: isActive ? `${cat.colore}33` : 'transparent', color:cat.colore, fontSize:10, cursor:'pointer', fontWeight: isActive ? 700 : 400 }}>
-                {cat.emoji} {cat.nome}
-              </button>
-            );
-          })}
           {/* Legenda mini-squadre */}
           {miniSquadre.length > 0 && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -717,7 +699,7 @@ function SubDashboardMobile({ wr, miniSquadre, solleciti, setSolleciti, setMiniS
       {selectedWR && <PopupWR w={selectedWR} onClose={() => setSelectedWR(null)} />}
       {storicoWR && <StoricoSolleciti wr={storicoWR} solleciti={solleciti} setSolleciti={setSolleciti} API={API} onClose={() => setStoricoWR(null)} />}
       {showSolleciti && <SollicitiPopup solleciti={solleciti} wr={wr} onClose={() => setShowSolleciti(false)} onSelectWR={w => { setSelectedWR(w); }} />}
-      {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} subCode={subCode} miniSquadre={miniSquadre} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} solleciti={solleciti} categorie={categorie} />}
+      {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} subCode={subCode} miniSquadre={miniSquadre} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} solleciti={solleciti} />}
 
       {/* Topbar */}
       <div style={{ background:'var(--panel)', borderBottom:'1px solid var(--border)', padding:'0 12px', height:44, display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
@@ -935,13 +917,12 @@ export default function SubDashboard({ previewMode }) {
       setLoading(true);
       Promise.all([
         axios.get(`${API}/mini-squadre?sub_code=${previewMode.subCode}`),
-        axios.get(`${API}/solleciti`),
-        axios.get(`${API}/categorie-discriminante`)
-      ]).then(([sqR, solR, catR]) => {
+        axios.get(`${API}/solleciti`)
+      ]).then(([sqR, solR]) => {
         setMiniSquadre(sqR.data);
         const filtered = solR.data.filter(s => String(s.sub_code).trim() === String(previewMode.subCode).trim());
+        console.log('Solleciti totali:', solR.data.length, 'filtrati per', previewMode.subCode, ':', filtered.length);
         setSolleciti(filtered);
-        setCategorie(catR.data.categorie || []);
       }).catch(e => console.error('Errore caricamento preview:', e))
       .finally(() => setLoading(false));
       return;
@@ -1082,7 +1063,7 @@ export default function SubDashboard({ previewMode }) {
       {storicoWR && <StoricoSolleciti wr={storicoWR} solleciti={solleciti} setSolleciti={setSolleciti} API={API} onClose={() => setStoricoWR(null)} />}
       {showConfronta && selectedRows.size === 2 && (() => { const [a,b] = [...selectedRows]; const wrA = wr.find(w=>String(w.WR)===a); const wrB = wr.find(w=>String(w.WR)===b); return wrA && wrB ? <ConfrontaWR wrA={wrA} wrB={wrB} onClose={() => setShowConfronta(false)} /> : null; })()}
       {showSolleciti && <SollicitiPopup solleciti={solleciti} wr={wr} onClose={() => setShowSolleciti(false)} onSelectWR={w => { setSelectedWR(w); setActiveTab('pratiche'); }} />}
-      {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} subCode={subCode} miniSquadre={miniSquadre} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} solleciti={solleciti} categorie={categorie} />}
+      {showMappa && <MappaSub wr={wr} onClose={() => setShowMappa(false)} API={API} user={user} subCode={subCode} miniSquadre={miniSquadre} onSquadraCreata={sq => setMiniSquadre(prev => [...prev, sq])} solleciti={solleciti} />}
       {selectedWR && <PopupWR w={selectedWR} onClose={() => setSelectedWR(null)} />}
 
       {/* Topbar */}

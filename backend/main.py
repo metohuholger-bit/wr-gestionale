@@ -44,6 +44,8 @@ async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer)
         user = await db.users.find_one({"email": payload["email"]})
         if not user:
             raise HTTPException(status_code=401, detail="Utente non trovato")
+        # Aggiorna last_seen
+        await db.users.update_one({"email": payload["email"]}, {"$set": {"last_seen": datetime.utcnow()}})
         return user
     except Exception:
         raise HTTPException(status_code=401, detail="Token non valido")
@@ -351,6 +353,15 @@ async def migra_solleciti(user=Depends(get_current_user)):
             migrati += 1
     return {"migrati": migrati}
 
+
+# ── UTENTI ONLINE ──
+@app.get("/admin/online")
+async def get_online(user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    cutoff = datetime.utcnow() - timedelta(minutes=5)
+    cursor = db.users.find({"last_seen": {"$gte": cutoff}}, {"_id": 0, "email": 1, "name": 1, "picture": 1, "role": 1, "sub_code": 1, "last_seen": 1})
+    return await cursor.to_list(length=100)
 
 # ── WR NASCOSTE ──
 @app.get("/wr-nascoste")

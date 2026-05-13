@@ -224,11 +224,17 @@ function DashboardHome({ onSelectSquadra }) {
   const [loading, setLoading] = useState(true);
   const [solleciti, setSolleciti] = useState([]);
   const [sollecitaWR, setSollecitaWR] = useState(null);
+  const [online, setOnline] = useState([]);
 
   useEffect(() => {
     Promise.all([axios.get(`${API}/wr`), axios.get(`${API}/mini-squadre`), axios.get(`${API}/solleciti`)])
       .then(([w, s, sol]) => { setWr(w.data); setMiniSquadre(s.data); setSolleciti(sol.data); })
       .catch(() => {}).finally(() => setLoading(false));
+    // Carica utenti online
+    const loadOnline = () => axios.get(`${API}/admin/online`).then(r => setOnline(r.data)).catch(() => {});
+    loadOnline();
+    const interval = setInterval(loadOnline, 30000);
+    return () => clearInterval(interval);
   }, [API]);
 
   const oggi = new Date();
@@ -327,7 +333,21 @@ function DashboardHome({ onSelectSquadra }) {
         )}
       </div>
 
-      {/* Sub selector */}
+      {/* Utenti online */}
+      {online.length > 0 && (
+        <div style={{ marginBottom:16, display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+          <span style={{ fontSize:9, fontFamily:'monospace', letterSpacing:3, color:'#475569' }}>ONLINE ORA</span>
+          {online.map((u, i) => (
+            <div key={i} style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(34,197,94,0.08)', border:'1px solid rgba(34,197,94,0.2)', borderRadius:20, padding:'4px 10px' }}>
+              <div style={{ width:7, height:7, borderRadius:'50%', background:'#22c55e', flexShrink:0 }} />
+              {u.picture && <img src={u.picture} alt="" style={{ width:18, height:18, borderRadius:'50%' }} />}
+              <span style={{ fontSize:11, color:'#e2e8f0' }}>{u.name || u.email}</span>
+              {u.sub_code && <span style={{ fontSize:9, color:'#22c55e', fontFamily:'monospace' }}>{u.sub_code}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Sub selector */}}
       <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:24 }}>
         <button onClick={() => setSelectedSub(null)}
           className="sub-pill"
@@ -586,7 +606,20 @@ function VistaSub() {
   useEffect(() => { axios.get(`${API}/wr`).then(r => setWr(r.data)).catch(() => {}); }, [API]);
 
   const squadre = [...new Set(wr.map(w => w.Sq).filter(Boolean))].sort();
-  const wrFiltrati = wr.filter(w => w.Sq === selectedSq && w.StatoWR?.toUpperCase() !== 'NUOVA');
+  const [impostazioni, setImpostazioni] = React.useState({ discriminante_nascondi: [] });
+  React.useEffect(() => {
+    axios.get(`${API}/impostazioni`).then(r => setImpostazioni(r.data)).catch(() => {});
+  }, [API]);
+
+  const wrFiltrati = wr.filter(w => {
+    if (w.Sq !== selectedSq) return false;
+    if (w.StatoWR?.toUpperCase() === 'NUOVA') return false;
+    // Applica filtro discriminante come per i sub
+    const disc = (w.Discriminante || '').toLowerCase();
+    const parole = impostazioni.discriminante_nascondi || [];
+    if (parole.some(p => disc.includes(p.toLowerCase()))) return false;
+    return true;
+  });
   const fakeUser = { ...user, role: 'sub', sub_code: selectedSq };
 
   if (loaded && selectedSq) {

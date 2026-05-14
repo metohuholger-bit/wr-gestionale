@@ -155,10 +155,6 @@ async def get_sheet_data():
             val = clean.get(col, "")
             if val and re.match(r'^\d+,\d+$', val):
                 clean[col] = val.replace(",", ".")
-        # Pulisci Note — rimuovi info tecniche TIM dopo "ID NTW SAP:"
-        note = clean.get("Note", "")
-        if note and "ID NTW SAP:" in note:
-            clean["Note"] = note[:note.index("ID NTW SAP:")].strip().strip("_").strip()
         rows.append(clean)
     _sheet_cache = {"data": rows, "ts": time.time()}
     return rows

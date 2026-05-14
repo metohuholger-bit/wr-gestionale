@@ -155,6 +155,26 @@ async def get_sheet_data():
             val = clean.get(col, "")
             if val and re.match(r'^\d+,\d+$', val):
                 clean[col] = val.replace(",", ".")
+        # Pulisci Note — rimuovi blocco tecnico TIM (ID NTW SAP, OdA, AdL, FdV, WBS)
+        import re as re2
+        note = clean.get("Note", "") or ""
+        if note:
+            # Rimuovi tutto il blocco tecnico TIM
+            note = re2.sub(r'ID NTW SAP:[^
+]*', '', note)
+            note = re2.sub(r'_?OdA:\s*\S+', '', note)
+            note = re2.sub(r'_?AdL:\s*\S+', '', note)
+            note = re2.sub(r'_?FdV:\s*\S+', '', note)
+            note = re2.sub(r'_?WBS:\s*\S+', '', note)
+            note = re2.sub(r'\s*_\s*', ' ', note)
+            clean["Note"] = note.strip()
+        # Pulisci Note — rimuovi blocco tecnico TIM all'inizio
+        import re as _re
+        note = clean.get("Note", "")
+        if note:
+            # Rimuove pattern tipo: ID NTW SAP:xxx _OdA: xxx _AdL: x _FdV: x,xxx _WBS: xxx _
+            note_pulita = _re.sub(r'^(ID NTW SAP:[^\s]+\s*)?(_OdA:[^_]*)?(_AdL:[^_]*)?(_FdV:[^_]*)?(_WBS:[^_]*)?_?\s*', '', note).strip()
+            clean["Note"] = note_pulita if note_pulita else note
         rows.append(clean)
     _sheet_cache = {"data": rows, "ts": time.time()}
     return rows

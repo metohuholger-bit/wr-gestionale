@@ -268,43 +268,43 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
         const isAssigned = !!wrToSquadra[String(w.WR)];
         const color = wrToSquadra[String(w.WR)]?.color || (isInferred ? '#f59e0b' : w.CoordCorretta ? '#22c55e' : '#3b82f6');
         const sqNome = wrToSquadra[String(w.WR)]?.nome || '';
-        let marker;
+        const marker = L.circleMarker([lat, lon], {
+          radius: isAssigned ? 10 : 9,
+          fillColor: color,
+          color: isInferred ? '#f59e0b' : w.CoordCorretta ? '#22c55e' : 'white',
+          weight: isInferred ? 3 : isAssigned ? 3 : 2,
+          fillOpacity: isInferred ? 0.6 : 0.9,
+          dashArray: isInferred ? '4,2' : null
+        }).addTo(map).bindPopup(`<div style="font-family:monospace;font-size:12px">
+          <b style="color:${color}">WR ${w.WR}</b><br/>
+          ${w.Indirizzo||''}, ${w.Localita||''}<br/>
+          Stato: <b>${w.StatoWR}</b>
+          ${sqNome ? `<br/><span style="color:${color}">■ ${sqNome}</span>` : ''}
+          ${isInferred ? '<br/><span style="color:#f59e0b">⚠ Posizione approssimativa — clicca per correggere</span>' : ''}
+          ${w.CoordCorretta ? '<br/><span style="color:#22c55e">✓ Posizione corretta</span>' : ''}
+          ${sovrapposto ? '<br/><span style="color:#94a3b8">📍 Stesso punto di altra WR</span>' : ''}
+          ${isInferred ? `<br/><button onclick="window._correggiWR('${w.WR}', this)" style="margin-top:6px;background:rgba(245,158,11,0.2);border:1px solid #f59e0b;color:#f59e0b;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px">✏️ Correggi posizione</button>` : ''}
+        </div>`);
         if (isInferred) {
-          // Marker trascinabile per posizioni approssimative
-          marker = L.marker([lat, lon], {
-            draggable: true,
-            icon: L.divIcon({
-              className: '',
-              html: `<div style="width:14px;height:14px;background:#f59e0b;border:2px solid white;border-radius:50%;opacity:0.85;cursor:grab;box-shadow:0 2px 4px rgba(0,0,0,0.4)"></div>`,
-              iconSize: [14, 14], iconAnchor: [7, 7], popupAnchor: [0, -10]
-            })
-          }).addTo(map);
-          marker.bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:#f59e0b">WR ${w.WR}</b><br/>${w.Indirizzo||''}, ${w.Localita||''}<br/>Stato: <b>${w.StatoWR}</b>${sqNome ? `<br/><span style="color:${color}">■ ${sqNome}</span>` : ''}<br/><span style="color:#f59e0b">⚠ Posizione approssimativa</span><br/><small style="color:#94a3b8">Trascina per correggere la posizione</small>${sovrapposto ? '<br/><span style="color:#94a3b8">📍 Stesso punto di altra WR</span>' : ''}</div>`);
-          marker.on('dragend', async (e) => {
-            const { lat: newLat, lng: newLon } = e.target.getLatLng();
-            try {
-              await fetch(`${API}/coordinate-corrette`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token') },
-                body: JSON.stringify({ wr: String(w.WR), lat: newLat, lon: newLon })
-              });
-              // Aggiorna icona a verde
-              marker.setIcon(L.divIcon({
-                className: '',
-                html: '<div style="width:14px;height:14px;background:#22c55e;border:2px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.4)"></div>',
-                iconSize: [14, 14], iconAnchor: [7, 7], popupAnchor: [0, -10]
-              }));
-              marker.bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:#22c55e">WR ${w.WR}</b><br/>${w.Indirizzo||''}, ${w.Localita||''}<br/>Stato: <b>${w.StatoWR}</b><br/><span style="color:#22c55e">✓ Posizione corretta</span></div>`);
-            } catch(err) { console.error(err); }
-          });
-        } else {
-          marker = L.circleMarker([lat, lon], {
-            radius: isAssigned ? 10 : 9,
-            fillColor: color,
-            color: w.CoordCorretta ? '#22c55e' : 'white',
-            weight: isAssigned ? 3 : 2,
-            fillOpacity: 0.9
-          }).addTo(map).bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:${color}">WR ${w.WR}</b><br/>${w.Indirizzo||''}, ${w.Localita||''}<br/>Stato: <b>${w.StatoWR}</b>${sqNome ? `<br/><span style="color:${color}">■ ${sqNome}</span>` : ''}${w.CoordCorretta ? '<br/><span style="color:#22c55e">✓ Posizione corretta</span>' : ''}${sovrapposto ? '<br/><span style="color:#94a3b8">📍 Stesso punto di altra WR</span>' : ''}</div>`);
+          // Click su "Correggi posizione" attiva modalità drag
+          window._correggiWR = async (wrNum, btn) => {
+            btn.textContent = '📍 Clicca sulla mappa per impostare la posizione';
+            btn.style.color = '#22c55e';
+            btn.style.borderColor = '#22c55e';
+            map.once('click', async (e) => {
+              const { lat: newLat, lng: newLon } = e.latlng;
+              try {
+                await fetch(`${API}/coordinate-corrette`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+                  body: JSON.stringify({ wr: wrNum, lat: newLat, lon: newLon })
+                });
+                marker.setStyle({ fillColor: '#22c55e', color: '#22c55e', dashArray: null, fillOpacity: 0.9 });
+                marker.setLatLng([newLat, newLon]);
+                marker.closePopup();
+              } catch(err) { console.error(err); }
+            });
+          };
         }
         if (!isAssigned) marker.on('click', () => toggleSelect(String(w.WR)));
         markersRef.current[String(w.WR)] = marker;

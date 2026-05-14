@@ -306,7 +306,7 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
             });
           };
         }
-        if (!isAssigned) marker.on('click', () => toggleSelect(String(w.WR)));
+        if (!isAssigned && !isInferred) marker.on('click', () => toggleSelect(String(w.WR)));
         markersRef.current[String(w.WR)] = marker;
         bounds.push([lat, lon]);
       });

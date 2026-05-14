@@ -1,25 +1,34 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import httpx, os, jwt, time, re, secrets
+import httpx, os, jwt
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 from typing import Optional, List
+import secrets
 
 load_dotenv()
 
 app = FastAPI(title="WR Gestionale API")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-MONGO_URL = os.getenv("MONGO_URL", "")
-SECRET_KEY = os.getenv("SECRET_KEY", "secret")
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
-SHEET_CSV_URL = os.getenv("SHEET_CSV_URL", "")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
+# ── DATABASE ──
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
 client = AsyncIOMotorClient(MONGO_URL)
 db = client.wr_gestionale
+
+# ── AUTH ──
+SECRET_KEY = os.getenv("SECRET_KEY", "changeme")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 bearer = HTTPBearer()
 
 def create_token(data: dict):
@@ -34,58 +43,100 @@ async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer)
         payload = decode_token(creds.credentials)
         user = await db.users.find_one({"email": payload["email"]})
         if not user:
-            raise HTTPException(status_code=401)
+            raise HTTPException(status_code=401, detail="Utente non trovato")
+        # Aggiorna last_seen
         await db.users.update_one({"email": payload["email"]}, {"$set": {"last_seen": datetime.utcnow()}})
         return user
     except Exception:
         raise HTTPException(status_code=401, detail="Token non valido")
 
+# ── MODELS ──
+class GoogleAuthRequest(BaseModel):
+    token: str
+
+class MiniSquadra(BaseModel):
+    nome: str
+    sub_code: str
+    wr_list: List[str] = []
+
+# ── ROUTES ──
+
+@app.get("/")
+def root():
+    return {"status": "ok", "app": "WR Gestionale"}
+
 @app.post("/auth/google")
-async def auth_google(data: dict):
-    token = data.get("token")
-    try:
-        async with httpx.AsyncClient() as c:
-            r = await c.get(f"https://oauth2.googleapis.com/tokeninfo?id_token={token}")
+async def google_auth(req: GoogleAuthRequest):
+    async with httpx.AsyncClient() as client_http:
+        r = await client_http.get(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {req.token}"}
+        )
+        if r.status_code != 200:
+            raise HTTPException(status_code=401, detail="Token Google non valido")
         info = r.json()
-        if "error" in info:
-            raise HTTPException(status_code=401, detail=info.get("error_description", "Token non valido"))
-        email = info.get("email", "")
-        name = info.get("name", "")
-        picture = info.get("picture", "")
-        if not email:
-            raise HTTPException(status_code=401, detail="Email non trovata nel token")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=str(e))
+
+    email = info.get("email")
+    if not email:
+        raise HTTPException(status_code=401, detail="Email non trovata")
 
     user = await db.users.find_one({"email": email})
     if not user:
+        # Auto-admin per email @mdsimpianti.com, pending per tutti gli altri
         auto_role = "admin" if email.endswith("@mdsimpianti.com") else "pending"
-        user_data = {"email": email, "name": name, "picture": picture, "role": auto_role, "sub_code": None, "created_at": datetime.utcnow()}
+        user_data = {
+            "email": email,
+            "name": info.get("name", ""),
+            "picture": info.get("picture", ""),
+            "role": auto_role,
+            "sub_code": None,
+            "created_at": datetime.utcnow()
+        }
         await db.users.insert_one(user_data)
         user = user_data
 
     if user.get("role") == "pending":
         raise HTTPException(status_code=403, detail="Accesso in attesa di approvazione")
 
-    tok = create_token({"email": email, "role": user["role"], "sub_code": user.get("sub_code")})
-    return {"token": tok, "user": {"email": email, "name": name, "picture": picture, "role": user["role"], "sub_code": user.get("sub_code")}}
+    token = create_token({"email": email, "role": user["role"], "sub_code": user.get("sub_code")})
+    return {
+        "token": token,
+        "user": {
+            "email": email,
+            "name": user.get("name"),
+            "picture": user.get("picture"),
+            "role": user["role"],
+            "sub_code": user.get("sub_code")
+        }
+    }
 
 @app.get("/me")
 async def get_me(user=Depends(get_current_user)):
-    return {"email": user["email"], "name": user.get("name", ""), "picture": user.get("picture", ""), "role": user["role"], "sub_code": user.get("sub_code")}
+    return {
+        "email": user["email"],
+        "name": user.get("name"),
+        "picture": user.get("picture"),
+        "role": user["role"],
+        "sub_code": user.get("sub_code")
+    }
 
+# ── WR DATA (legge da Google Sheet CSV) ──
+SHEET_CSV_URL = os.getenv("SHEET_CSV_URL", "")
+
+import time
 _sheet_cache = {"data": [], "ts": 0}
-CACHE_TTL = 300
+CACHE_TTL = 300  # 5 minuti
 
 async def get_sheet_data():
     global _sheet_cache
     if time.time() - _sheet_cache["ts"] < CACHE_TTL and _sheet_cache["data"]:
         return _sheet_cache["data"]
     async with httpx.AsyncClient() as c:
-        r = await c.get(SHEET_CSV_URL, follow_redirects=True, timeout=15)
+        r = await c.get(SHEET_CSV_URL, follow_redirects=True)
+    import re
+
     import csv, io
+    # Usa DictReader con supporto per campi quotati
     reader = csv.DictReader(io.StringIO(r.text), quoting=csv.QUOTE_MINIMAL)
     rows = []
     for row in reader:
@@ -99,6 +150,7 @@ async def get_sheet_data():
             if k is None:
                 continue
             clean[k.strip()] = (v or "").strip()
+        # Converti coordinate con virgola decimale in punto
         for col in ["Latitudine", "Longitudine"]:
             val = clean.get(col, "")
             if val and re.match(r'^\d+,\d+$', val):
@@ -113,80 +165,91 @@ async def get_wr(user=Depends(get_current_user)):
         return []
     rows = await get_sheet_data()
 
+    # Filtra per ruolo usando colonna "Sq"
     if user["role"] == "sub":
         rows = [r for r in rows if r.get("Sq") == user.get("sub_code")]
+        # Nascondi WR con discriminante configurato
+        impostazioni = await db.impostazioni.find_one({}, {"_id": 0})
+        parole_nascoste = [p.lower().strip() for p in (impostazioni or {}).get("discriminante_nascondi", []) if p.strip()]
+        if parole_nascoste:
+            def discriminante_nascosto(r):
+                disc = (r.get("Discriminante") or "").lower()
+                return any(p in disc for p in parole_nascoste)
+            rows = [r for r in rows if not discriminante_nascosto(r)]
+        # Nascondi WR manuali
+        wr_nascoste_doc = await db.wr_nascoste.find_one({}, {"_id": 0})
+        wr_nascoste_lista = (wr_nascoste_doc or {}).get("lista", [])
+        if wr_nascoste_lista:
+            rows = [r for r in rows if str(r.get("WR", "")).strip() not in wr_nascoste_lista]
+    elif user["role"] == "squad":
+        sq = await db.mini_squadre.find_one({"link_token": user.get("squad_token")})
+        if sq:
+            rows = [r for r in rows if str(r.get("WR","")).strip() in [str(x).strip() for x in sq.get("wr_list", [])]]
+        else:
+            rows = []
 
-    coord_corrette_cursor = db.coordinate_corrette.find({}, {"_id": 0})
-    coord_corrette_list = await coord_corrette_cursor.to_list(length=5000)
-    coord_corrette = {c["wr"]: c for c in coord_corrette_list}
-
+    # Calcola coordinate di riferimento per comune e centrale
+    # usando la media delle WR che hanno coordinate reali
     comune_coords = {}
     centrale_coords = {}
     for r in rows:
-        lat = r.get("Latitudine", "")
-        lon = r.get("Longitudine", "")
+        lat = r.get("Lat") or r.get("Latitudine")
+        lon = r.get("Lon") or r.get("Longitudine")
         try:
-            flat = float(str(lat).replace(",", "."))
-            flon = float(str(lon).replace(",", "."))
-            if flat and flon and 35 < flat < 48 and 6 < flon < 19:
+            lat, lon = float(str(lat).replace(",",".")), float(str(lon).replace(",","."))
+            if lat and lon and 35 < lat < 48 and 6 < lon < 19:
                 comune = r.get("Localita", "")
                 centrale = r.get("Centrale", "")
                 if comune:
                     if comune not in comune_coords:
                         comune_coords[comune] = []
-                    comune_coords[comune].append((flat, flon))
+                    comune_coords[comune].append((lat, lon))
                 if centrale:
                     if centrale not in centrale_coords:
                         centrale_coords[centrale] = []
-                    centrale_coords[centrale].append((flat, flon))
+                    centrale_coords[centrale].append((lat, lon))
         except:
             pass
 
+    # Calcola medie
     comune_ref = {k: (sum(v[0] for v in vs)/len(vs), sum(v[1] for v in vs)/len(vs)) for k, vs in comune_coords.items()}
     centrale_ref = {k: (sum(v[0] for v in vs)/len(vs), sum(v[1] for v in vs)/len(vs)) for k, vs in centrale_coords.items()}
 
+    # Carica coordinate corrette dal database
+    coord_corrette_cursor = db.coordinate_corrette.find({}, {"_id": 0})
+    coord_corrette_list = await coord_corrette_cursor.to_list(length=5000)
+    coord_corrette = {c["wr"]: c for c in coord_corrette_list}
+
+    # Aggiungi coordinate inferite per WR senza coordinate
     for r in rows:
+        # Applica coordinate corrette se esistono
         wr_key = str(r.get("WR", "")).strip()
         if wr_key in coord_corrette:
             r["Latitudine"] = str(coord_corrette[wr_key]["lat"])
             r["Longitudine"] = str(coord_corrette[wr_key]["lon"])
             r["CoordCorretta"] = True
             r["CoordInferita"] = False
-        else:
-            lat = r.get("Latitudine", "")
-            lon = r.get("Longitudine", "")
-            try:
-                flat = float(str(lat).replace(",", "."))
-                flon = float(str(lon).replace(",", "."))
-                has_coord = flat and flon and 35 < flat < 48 and 6 < flon < 19
-            except:
-                has_coord = False
-            if not has_coord:
-                comune = r.get("Localita", "")
-                centrale = r.get("Centrale", "")
-                ref = comune_ref.get(comune) or centrale_ref.get(centrale)
-                if ref:
-                    r["LatInferita"] = round(ref[0], 6)
-                    r["LonInferita"] = round(ref[1], 6)
-                    r["CoordInferita"] = True
+        lat = r.get("Latitudine", "")
+        lon = r.get("Longitudine", "")
+        try:
+            flat = float(str(lat).replace(",","."))
+            flon = float(str(lon).replace(",","."))
+            has_coord = flat and flon and 35 < flat < 48 and 6 < flon < 19
+        except:
+            has_coord = False
 
-    if user["role"] == "sub":
-        impostazioni = await db.impostazioni.find_one({}, {"_id": 0})
-        parole_nascoste = [p.lower().strip() for p in (impostazioni or {}).get("discriminante_nascondi", []) if p.strip()]
-        if parole_nascoste:
-            rows = [r for r in rows if not any(p in (r.get("Discriminante") or "").lower() for p in parole_nascoste)]
-        wr_nascoste_doc = await db.wr_nascoste.find_one({}, {"_id": 0})
-        wr_nascoste_lista = (wr_nascoste_doc or {}).get("lista", [])
-        if wr_nascoste_lista:
-            rows = [r for r in rows if str(r.get("WR", "")).strip() not in wr_nascoste_lista]
+        if not has_coord:
+            comune = r.get("Localita", "")
+            centrale = r.get("Centrale", "")
+            ref = comune_ref.get(comune) or centrale_ref.get(centrale)
+            if ref:
+                r["LatInferita"] = round(ref[0], 6)
+                r["LonInferita"] = round(ref[1], 6)
+                r["CoordInferita"] = True
 
     return rows
 
-class MiniSquadra(BaseModel):
-    nome: str
-    sub_code: Optional[str] = None
-    wr_list: List[str] = []
-
+# ── MINI-SQUADRE ──
 @app.get("/mini-squadre")
 async def get_mini_squadre(user=Depends(get_current_user), sub_code: str = None):
     if user["role"] not in ["admin", "sub"]:
@@ -203,8 +266,17 @@ async def create_mini_squadra(sq: MiniSquadra, user=Depends(get_current_user)):
     if user["role"] not in ["admin", "sub"]:
         raise HTTPException(status_code=403)
     token = secrets.token_urlsafe(8)
+    # Admin usa sub_code dal body, sub usa il suo
     sub_code = user["sub_code"] if user["role"] == "sub" else sq.sub_code
-    doc = {"nome": sq.nome, "sub_code": sub_code, "wr_list": sq.wr_list, "link_token": token, "created_at": datetime.utcnow()}
+    if not sub_code:
+        raise HTTPException(status_code=400, detail="sub_code mancante")
+    doc = {
+        "nome": sq.nome,
+        "sub_code": sub_code,
+        "wr_list": sq.wr_list,
+        "link_token": token,
+        "created_at": datetime.utcnow()
+    }
     await db.mini_squadre.insert_one(doc)
     return {"token": token, "link": f"/view/{token}"}
 
@@ -212,7 +284,10 @@ async def create_mini_squadra(sq: MiniSquadra, user=Depends(get_current_user)):
 async def update_mini_squadra_wr(token: str, wr_list: List[str], user=Depends(get_current_user)):
     if user["role"] not in ["admin", "sub"]:
         raise HTTPException(status_code=403)
-    await db.mini_squadre.update_one({"link_token": token}, {"$set": {"wr_list": wr_list}})
+    await db.mini_squadre.update_one(
+        {"link_token": token},
+        {"$set": {"wr_list": wr_list}}
+    )
     return {"ok": True}
 
 @app.delete("/mini-squadre/{token}")
@@ -222,6 +297,8 @@ async def delete_mini_squadra(token: str, user=Depends(get_current_user)):
     await db.mini_squadre.delete_one({"link_token": token})
     return {"ok": True}
 
+
+# ── SOLLECITI ──
 class Sollecito(BaseModel):
     wr: str
     sub_code: str
@@ -233,16 +310,20 @@ async def get_solleciti(user=Depends(get_current_user)):
         cursor = db.solleciti.find({"sub_code": user["sub_code"]}, {"_id": 0})
     else:
         cursor = db.solleciti.find({}, {"_id": 0})
-    return await cursor.to_list(length=500)
+    return await cursor.to_list(length=200)
 
 @app.post("/solleciti")
 async def crea_sollecito(s: Sollecito, user=Depends(get_current_user)):
     if user["role"] != "admin":
         raise HTTPException(status_code=403)
-    nuovo = {"messaggio": s.messaggio, "data": datetime.utcnow(), "da": user["email"]}
+    voce = {"messaggio": s.messaggio, "data": datetime.utcnow(), "da": user["email"]}
     await db.solleciti.update_one(
         {"wr": s.wr, "sub_code": s.sub_code},
-        {"$push": {"storico": nuovo}, "$set": {"wr": s.wr, "sub_code": s.sub_code, "ultima_data": datetime.utcnow()}},
+        {
+            "$set": {"wr": s.wr, "sub_code": s.sub_code},
+            "$push": {"storico": voce},
+            "$inc": {"contatore": 1}
+        },
         upsert=True
     )
     return {"ok": True}
@@ -267,63 +348,6 @@ async def aggiorna_storico(wr: str, body: StoricoUpdate, user=Depends(get_curren
         await db.solleciti.update_one({"wr": wr}, {"$set": {"storico": body.storico}})
     return {"ok": True}
 
-class Lavorazione(BaseModel):
-    token: str
-    wr: str
-    nota: Optional[str] = ""
-
-@app.get("/lavorazioni/{token}")
-async def get_lavorazioni(token: str):
-    cursor = db.lavorazioni.find({"token": token}, {"_id": 0})
-    return await cursor.to_list(length=500)
-
-@app.post("/lavorazioni")
-async def set_lavorazione(data: Lavorazione):
-    existing = await db.lavorazioni.find_one({"token": data.token, "wr": data.wr})
-    if existing:
-        await db.lavorazioni.delete_one({"token": data.token, "wr": data.wr})
-        return {"ok": True, "action": "removed"}
-    else:
-        await db.lavorazioni.insert_one({"token": data.token, "wr": data.wr, "nota": data.nota, "data": datetime.utcnow()})
-        return {"ok": True, "action": "added"}
-
-@app.put("/lavorazioni/{token}/{wr}/nota")
-async def update_nota(token: str, wr: str, data: dict):
-    await db.lavorazioni.update_one({"token": token, "wr": wr}, {"$set": {"nota": data.get("nota", "")}})
-    return {"ok": True}
-
-@app.get("/view/{token}")
-async def public_view(token: str):
-    sq = await db.mini_squadre.find_one({"link_token": token}, {"_id": 0})
-    if not sq:
-        raise HTTPException(status_code=404, detail="Link non valido")
-    rows = await get_sheet_data()
-    wr_list = [str(w).strip() for w in sq.get("wr_list", [])]
-    result = [r for r in rows if str(r.get("WR", "")).strip() in wr_list]
-    return {"squadra": sq["nome"], "sub_code": sq["sub_code"], "wr": result}
-
-@app.get("/admin/users")
-async def get_users(user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403)
-    cursor = db.users.find({}, {"_id": 0})
-    return await cursor.to_list(length=200)
-
-@app.put("/admin/users/{email}")
-async def update_user(email: str, role: str, sub_code: Optional[str] = None, user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403)
-    await db.users.update_one({"email": email}, {"$set": {"role": role, "sub_code": sub_code}})
-    return {"ok": True}
-
-@app.get("/admin/online")
-async def get_online(user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403)
-    cutoff = datetime.utcnow() - timedelta(minutes=5)
-    cursor = db.users.find({"last_seen": {"$gte": cutoff}}, {"_id": 0, "email": 1, "name": 1, "picture": 1, "role": 1, "sub_code": 1})
-    return await cursor.to_list(length=100)
-
 @app.post("/admin/migra-solleciti")
 async def migra_solleciti(user=Depends(get_current_user)):
     if user["role"] != "admin":
@@ -334,10 +358,24 @@ async def migra_solleciti(user=Depends(get_current_user)):
     for doc in docs:
         if "storico" not in doc:
             storico = [{"messaggio": doc.get("messaggio", ""), "data": doc.get("data"), "da": doc.get("da", "")}]
-            await db.solleciti.update_one({"_id": doc["_id"]}, {"$set": {"storico": storico}, "$unset": {"messaggio": "", "data": "", "da": ""}})
+            await db.solleciti.update_one(
+                {"_id": doc["_id"]},
+                {"$set": {"storico": storico}, "$unset": {"messaggio": "", "data": "", "da": ""}}
+            )
             migrati += 1
     return {"migrati": migrati}
 
+
+# ── UTENTI ONLINE ──
+@app.get("/admin/online")
+async def get_online(user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    cutoff = datetime.utcnow() - timedelta(minutes=5)
+    cursor = db.users.find({"last_seen": {"$gte": cutoff}}, {"_id": 0, "email": 1, "name": 1, "picture": 1, "role": 1, "sub_code": 1, "last_seen": 1})
+    return await cursor.to_list(length=100)
+
+# ── COORDINATE CORRETTE ──
 class CoordinataCorretta(BaseModel):
     wr: str
     lat: float
@@ -366,6 +404,7 @@ async def elimina_coordinata(wr: str, user=Depends(get_current_user)):
     await db.coordinate_corrette.delete_one({"wr": wr})
     return {"ok": True}
 
+# ── WR NASCOSTE ──
 @app.get("/wr-nascoste")
 async def get_wr_nascoste(user=Depends(get_current_user)):
     if user["role"] != "admin":
@@ -387,20 +426,7 @@ async def mostra_wr(wr: str, user=Depends(get_current_user)):
     await db.wr_nascoste.update_one({}, {"$pull": {"lista": wr}})
     return {"ok": True}
 
-@app.get("/impostazioni")
-async def get_impostazioni(user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403)
-    doc = await db.impostazioni.find_one({}, {"_id": 0})
-    return doc or {"discriminante_nascondi": []}
-
-@app.post("/impostazioni")
-async def save_impostazioni(data: dict, user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403)
-    await db.impostazioni.update_one({}, {"$set": data}, upsert=True)
-    return {"ok": True}
-
+# ── CATEGORIE DISCRIMINANTE ──
 DEFAULT_CATEGORIE = [
     {"nome": "Fatto parziale", "emoji": "🔧", "pattern": "fatto.*su", "colore": "#f59e0b"},
     {"nome": "Manca XPole", "emoji": "🪝", "pattern": "manca xp|xpole", "colore": "#8b5cf6"},
@@ -419,4 +445,91 @@ async def save_categorie(data: dict, user=Depends(get_current_user)):
     if user["role"] != "admin":
         raise HTTPException(status_code=403)
     await db.categorie_discriminante.update_one({}, {"$set": data}, upsert=True)
+    return {"ok": True}
+
+# ── IMPOSTAZIONI ──
+@app.get("/impostazioni")
+async def get_impostazioni(user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    doc = await db.impostazioni.find_one({}, {"_id": 0})
+    return doc or {"discriminante_nascondi": []}
+
+@app.post("/impostazioni")
+async def save_impostazioni(data: dict, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    await db.impostazioni.update_one({}, {"$set": data}, upsert=True)
+    return {"ok": True}
+
+
+# ── LAVORAZIONI SQUADRA ──
+class Lavorazione(BaseModel):
+    token: str
+    wr: str
+    nota: Optional[str] = ""
+
+@app.get("/lavorazioni/{token}")
+async def get_lavorazioni(token: str):
+    cursor = db.lavorazioni.find({"token": token}, {"_id": 0})
+    return await cursor.to_list(length=500)
+
+@app.post("/lavorazioni")
+async def set_lavorazione(data: Lavorazione):
+    existing = await db.lavorazioni.find_one({"token": data.token, "wr": data.wr})
+    if existing:
+        # Toggle - rimuovi se già esiste
+        await db.lavorazioni.delete_one({"token": data.token, "wr": data.wr})
+        return {"ok": True, "action": "removed"}
+    else:
+        await db.lavorazioni.insert_one({
+            "token": data.token, "wr": data.wr,
+            "nota": data.nota, "data": datetime.utcnow()
+        })
+        return {"ok": True, "action": "added"}
+
+@app.put("/lavorazioni/{token}/{wr}/nota")
+async def update_nota(token: str, wr: str, data: dict):
+    await db.lavorazioni.update_one(
+        {"token": token, "wr": wr},
+        {"$set": {"nota": data.get("nota", "")}}
+    )
+    return {"ok": True}
+
+@app.get("/admin/lavorazioni/{token}")
+async def get_lavorazioni_admin(token: str, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    cursor = db.lavorazioni.find({"token": token}, {"_id": 0})
+    return await cursor.to_list(length=500)
+
+# ── VIEW PUBBLICA (no auth) ──
+@app.get("/view/{token}")
+async def public_view(token: str):
+    sq = await db.mini_squadre.find_one({"link_token": token}, {"_id": 0})
+    if not sq:
+        raise HTTPException(status_code=404, detail="Link non trovato")
+    if not SHEET_CSV_URL:
+        return {"squadra": sq["nome"], "wr": []}
+    all_rows = await get_sheet_data()
+    wr_list_str = [str(x).strip() for x in sq.get("wr_list", [])]
+    rows = [r for r in all_rows if str(r.get("WR", "")).strip() in wr_list_str]
+    return {"squadra": sq["nome"], "sub_code": sq["sub_code"], "wr": rows}
+
+# ── ADMIN: gestione utenti ──
+@app.get("/admin/users")
+async def get_users(user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    cursor = db.users.find({}, {"_id": 0})
+    return await cursor.to_list(length=200)
+
+@app.put("/admin/users/{email}")
+async def update_user(email: str, role: str, sub_code: Optional[str] = None, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    await db.users.update_one(
+        {"email": email},
+        {"$set": {"role": role, "sub_code": sub_code}}
+    )
     return {"ok": True}

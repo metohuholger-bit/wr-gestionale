@@ -47,11 +47,15 @@ async def auth_google(data: dict):
         async with httpx.AsyncClient() as c:
             r = await c.get(f"https://oauth2.googleapis.com/tokeninfo?id_token={token}")
         info = r.json()
-        if info.get("aud") != GOOGLE_CLIENT_ID:
-            raise HTTPException(status_code=401)
+        if "error" in info:
+            raise HTTPException(status_code=401, detail=info.get("error_description", "Token non valido"))
         email = info.get("email", "")
         name = info.get("name", "")
         picture = info.get("picture", "")
+        if not email:
+            raise HTTPException(status_code=401, detail="Email non trovata nel token")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=401, detail=str(e))
 

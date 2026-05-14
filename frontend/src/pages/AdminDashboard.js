@@ -525,6 +525,7 @@ function PannelloWR({ squadra, wr, onClose }) {
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
     script.onload = () => {
       const L = window.L;
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://wr-gestionale.onrender.com';
       const map = L.map(mapRef.current, { center: [42.5, 11.5], zoom: 8 });
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, opacity: 0.7 }).addTo(map);
@@ -533,9 +534,46 @@ function PannelloWR({ squadra, wr, onClose }) {
         const lat = parseFloat(w.Latitudine) || parseFloat(w.LatInferita);
         const lon = parseFloat(w.Longitudine) || parseFloat(w.LonInferita);
         if (!lat || !lon) return;
-        L.circleMarker([lat, lon], { radius: 8, fillColor: isOld(w.Datadispaccio) ? '#ef4444' : '#3b82f6', color: 'white', weight: 2, fillOpacity: 0.9 })
-          .addTo(map)
-          .bindPopup(`<b>WR ${w.WR}</b><br/>${w.Indirizzo}, ${w.Localita}<br/>${w.StatoWR}`);
+        const isApprox = !!w.CoordInferita && !w.CoordCorretta;
+        const color = isOld(w.Datadispaccio) ? '#ef4444' : w.CoordCorretta ? '#22c55e' : isApprox ? '#f59e0b' : '#3b82f6';
+        
+        if (isApprox) {
+          // Marker trascinabile per coordinate approssimative
+          const marker = L.marker([lat, lon], {
+            draggable: true,
+            icon: L.divIcon({
+              className: '',
+              html: `<div style="width:14px;height:14px;background:${color};border:2px solid white;border-radius:50%;opacity:0.8;cursor:grab"></div>`,
+              iconSize: [14, 14], iconAnchor: [7, 7]
+            })
+          }).addTo(map);
+          marker.bindPopup(`<div style="font-family:monospace;font-size:12px">
+            <b style="color:${color}">WR ${w.WR}</b><br/>
+            ${w.Indirizzo||''}, ${w.Localita||''}<br/>
+            <span style="color:#f59e0b">⚠ Posizione approssimativa</span><br/>
+            <small>Trascina il marker per correggere</small>
+          </div>`);
+          marker.on('dragend', async (e) => {
+            const { lat: newLat, lng: newLon } = e.target.getLatLng();
+            try {
+              await fetch(apiUrl + '/coordinate-corrette', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+                body: JSON.stringify({ wr: String(w.WR), lat: newLat, lon: newLon })
+              });
+              marker.setIcon(L.divIcon({
+                className: '',
+                html: '<div style="width:14px;height:14px;background:#22c55e;border:2px solid white;border-radius:50%"></div>',
+                iconSize: [14, 14], iconAnchor: [7, 7]
+              }));
+              marker.bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:#22c55e">WR ${w.WR}</b><br/>${w.Indirizzo||''}, ${w.Localita||''}<br/><span style="color:#22c55e">✓ Posizione corretta</span></div>`);
+            } catch(e) { console.error(e); }
+          });
+        } else {
+          L.circleMarker([lat, lon], { radius: 8, fillColor: color, color: 'white', weight: w.CoordCorretta ? 3 : 2, fillOpacity: 0.9 })
+            .addTo(map)
+            .bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:${color}">WR ${w.WR}</b><br/>${w.Indirizzo||''}, ${w.Localita||''}<br/>${w.StatoWR}${w.CoordCorretta ? '<br/><span style="color:#22c55e">✓ Posizione corretta</span>' : ''}</div>`);
+        }
         bounds.push([lat, lon]);
       });
       if (bounds.length > 0) map.fitBounds(bounds, { padding: [20, 20] });

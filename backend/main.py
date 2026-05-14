@@ -215,8 +215,20 @@ async def get_wr(user=Depends(get_current_user)):
     comune_ref = {k: (sum(v[0] for v in vs)/len(vs), sum(v[1] for v in vs)/len(vs)) for k, vs in comune_coords.items()}
     centrale_ref = {k: (sum(v[0] for v in vs)/len(vs), sum(v[1] for v in vs)/len(vs)) for k, vs in centrale_coords.items()}
 
+    # Carica coordinate corrette dal database
+    coord_corrette_cursor = db.coordinate_corrette.find({}, {"_id": 0})
+    coord_corrette_list = await coord_corrette_cursor.to_list(length=5000)
+    coord_corrette = {c["wr"]: c for c in coord_corrette_list}
+
     # Aggiungi coordinate inferite per WR senza coordinate
     for r in rows:
+        # Applica coordinate corrette se esistono
+        wr_key = str(r.get("WR", "")).strip()
+        if wr_key in coord_corrette:
+            r["Latitudine"] = str(coord_corrette[wr_key]["lat"])
+            r["Longitudine"] = str(coord_corrette[wr_key]["lon"])
+            r["CoordCorretta"] = True
+            r["CoordInferita"] = False
         lat = r.get("Latitudine", "")
         lon = r.get("Longitudine", "")
         try:
@@ -362,6 +374,35 @@ async def get_online(user=Depends(get_current_user)):
     cutoff = datetime.utcnow() - timedelta(minutes=5)
     cursor = db.users.find({"last_seen": {"$gte": cutoff}}, {"_id": 0, "email": 1, "name": 1, "picture": 1, "role": 1, "sub_code": 1, "last_seen": 1})
     return await cursor.to_list(length=100)
+
+# ── COORDINATE CORRETTE ──
+class CoordinataCorretta(BaseModel):
+    wr: str
+    lat: float
+    lon: float
+
+@app.get("/coordinate-corrette")
+async def get_coordinate_corrette(user=Depends(get_current_user)):
+    cursor = db.coordinate_corrette.find({}, {"_id": 0})
+    return await cursor.to_list(length=5000)
+
+@app.post("/coordinate-corrette")
+async def salva_coordinata(data: CoordinataCorretta, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    await db.coordinate_corrette.update_one(
+        {"wr": data.wr},
+        {"$set": {"wr": data.wr, "lat": data.lat, "lon": data.lon, "updated_at": datetime.utcnow(), "updated_by": user["email"]}},
+        upsert=True
+    )
+    return {"ok": True}
+
+@app.delete("/coordinate-corrette/{wr}")
+async def elimina_coordinata(wr: str, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    await db.coordinate_corrette.delete_one({"wr": wr})
+    return {"ok": True}
 
 # ── WR NASCOSTE ──
 @app.get("/wr-nascoste")

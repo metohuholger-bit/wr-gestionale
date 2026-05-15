@@ -32,7 +32,13 @@ function MappaPublic({ wr, selected, onSelect, lavorazioni }) {
         const marker = L.circleMarker([lat, lon], {
           radius: 10, fillColor: color, color: 'white', weight: 2, fillOpacity: 0.9
         }).addTo(map)
-          .bindPopup(`<div style="font-family:monospace;font-size:12px"><b style="color:${color}">WR ${w.WR}</b><br/>${w.Indirizzo||''}, ${w.Localita||''}<br/>${lavorata ? '✅ Lavorata' : '⏳ Da fare'}</div>`);
+          .bindPopup(`<div style="font-family:monospace;font-size:12px;max-width:220px">
+  <b style="color:${color}">WR ${w.WR}</b><br/>
+  ${w.Indirizzo||''}, ${w.Localita||''}<br/>
+  ${lavorata ? '✅ Lavorata' : '⏳ Da fare'}
+  ${w.Note ? `<hr style="border-color:#333;margin:6px 0"/><span style="color:#f59e0b;font-size:11px">📋 ${w.Note}</span>` : ''}
+  ${(() => { const notaLav = lavorazioni.find(l => l.wr === String(w.WR)); return notaLav?.nota ? `<br/><span style="color:#22c55e;font-size:11px">📝 ${notaLav.nota}</span>` : ''; })()}
+</div>`);
         marker.on('click', () => onSelect(w));
         markersRef.current[String(w.WR)] = marker;
         bounds.push([lat, lon]);

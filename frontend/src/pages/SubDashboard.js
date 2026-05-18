@@ -6,8 +6,8 @@ import { useAuth } from '../context/AuthContext';
 const STATI_ESCLUSI = ['NUOVA'];
 
 function PopupWR({ w, onClose }) {
-  const lat = parseFloat(w.Latitudine);
-  const lon = parseFloat(w.Longitudine);
+  const lat = parseFloat(w.Latitudine) || parseFloat(w.LatInferita);
+  const lon = parseFloat(w.Longitudine) || parseFloat(w.LonInferita);
   const [showFullNote, setShowFullNote] = React.useState(false);
   const NOTE_MAX = 200;
 

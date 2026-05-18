@@ -38,6 +38,8 @@ function MappaPublic({ wr, selected, onSelect, lavorazioni }) {
   ${lavorata ? '✅ Lavorata' : '⏳ Da fare'}
   ${w.Note ? `<hr style="border-color:#333;margin:6px 0"/><span style="color:#f59e0b;font-size:11px">📋 ${w.Note}</span>` : ''}
   ${(() => { const notaLav = lavorazioni.find(l => l.wr === String(w.WR)); return notaLav?.nota ? `<br/><span style="color:#22c55e;font-size:11px">📝 ${notaLav.nota}</span>` : ''; })()}
+  <hr style="border-color:#333;margin:6px 0"/>
+  <a href="https://www.google.com/maps/dir/?api=1&destination=${parseFloat(w.Latitudine)||parseFloat(w.LatInferita)},${parseFloat(w.Longitudine)||parseFloat(w.LonInferita)}" target="_blank" style="color:#22c55e;font-size:11px;text-decoration:none">📍 Indicazioni stradali</a>
 </div>`);
         marker.on('click', () => onSelect(w));
         markersRef.current[String(w.WR)] = marker;

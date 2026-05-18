@@ -56,7 +56,7 @@ function MappaPublic({ wr, selected, onSelect, lavorazioni }) {
       document.head.appendChild(script);
     }
     return () => { if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; } };
-  }, [wr]);
+  }, [wr, lavorazioni]);
 
   useEffect(() => {
     if (!selected || !mapInstanceRef.current) return;

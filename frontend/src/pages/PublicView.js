@@ -8,6 +8,11 @@ function MappaPublic({ wr, selected, onSelect, lavorazioni }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef({});
+  const lavorazioniRef = useRef(lavorazioni);
+
+  useEffect(() => {
+    lavorazioniRef.current = lavorazioni;
+  }, [lavorazioni]);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
@@ -23,25 +28,33 @@ function MappaPublic({ wr, selected, onSelect, lavorazioni }) {
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, opacity: 0.7 }).addTo(map);
       const bounds = [];
-      wr.forEach((w, idx) => {
+      wr.forEach((w) => {
         const lat = parseFloat(w.Latitudine) || parseFloat(w.LatInferita);
         const lon = parseFloat(w.Longitudine) || parseFloat(w.LonInferita);
         if (!lat || !lon) return;
-        const lavorata = lavorazioni.some(l => l.wr === String(w.WR));
-        const color = lavorata ? '#22c55e' : '#3b82f6';
         const marker = L.circleMarker([lat, lon], {
-          radius: 10, fillColor: color, color: 'white', weight: 2, fillOpacity: 0.9
-        }).addTo(map)
-          .bindPopup(`<div style="font-family:monospace;font-size:12px;max-width:220px">
-  <b style="color:${color}">WR ${w.WR}</b><br/>
-  ${w.Indirizzo||''}, ${w.Localita||''}<br/>
-  ${lavorata ? '✅ Lavorata' : '⏳ Da fare'}
-  ${w.Note ? `<hr style="border-color:#333;margin:6px 0"/><span style="color:#f59e0b;font-size:11px">📋 ${w.Note}</span>` : ''}
-  ${(() => { const notaLav = lavorazioni.find(l => l.wr === String(w.WR)); return notaLav?.nota ? `<br/><span style="color:#22c55e;font-size:11px">📝 ${notaLav.nota}</span>` : ''; })()}
-  <hr style="border-color:#333;margin:6px 0"/>
-  <a href="https://www.google.com/maps/dir/?api=1&destination=${parseFloat(w.Latitudine)||parseFloat(w.LatInferita)},${parseFloat(w.Longitudine)||parseFloat(w.LonInferita)}" target="_blank" style="color:#22c55e;font-size:11px;text-decoration:none">📍 Indicazioni stradali</a>
-</div>`);
-        marker.on('click', () => onSelect(w));
+          radius: 10, fillColor: '#3b82f6', color: 'white', weight: 2, fillOpacity: 0.9
+        }).addTo(map);
+        marker.on('click', () => {
+          const lavs = lavorazioniRef.current;
+          const lavorata = lavs.some(l => l.wr === String(w.WR));
+          const notaLav = lavs.find(l => l.wr === String(w.WR));
+          const color = lavorata ? '#22c55e' : '#3b82f6';
+          marker.setStyle({ fillColor: color });
+          const destLat = parseFloat(w.Latitudine) || parseFloat(w.LatInferita);
+          const destLon = parseFloat(w.Longitudine) || parseFloat(w.LonInferita);
+          const popupHtml = `<div style="font-family:monospace;font-size:12px;max-width:220px">
+            <b style="color:${color}">WR ${w.WR}</b><br/>
+            ${w.Indirizzo||''}, ${w.Localita||''}<br/>
+            ${lavorata ? '✅ Lavorata' : '⏳ Da fare'}
+            ${w.Note ? `<hr style="border-color:#333;margin:6px 0"/><span style="color:#f59e0b;font-size:11px">📋 ${w.Note}</span>` : ''}
+            ${notaLav?.nota ? `<br/><span style="color:#22c55e;font-size:11px">📝 ${notaLav.nota}</span>` : ''}
+            <hr style="border-color:#333;margin:6px 0"/>
+            <a href="https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLon}" target="_blank" style="color:#22c55e;font-size:11px;text-decoration:none">📍 Indicazioni stradali</a>
+          </div>`;
+          L.popup().setLatLng([lat, lon]).setContent(popupHtml).openOn(map);
+          onSelect(w);
+        });
         markersRef.current[String(w.WR)] = marker;
         bounds.push([lat, lon]);
       });
@@ -56,7 +69,7 @@ function MappaPublic({ wr, selected, onSelect, lavorazioni }) {
       document.head.appendChild(script);
     }
     return () => { if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; } };
-  }, [wr, lavorazioni]);
+  }, [wr]);
 
   useEffect(() => {
     if (!selected || !mapInstanceRef.current) return;
@@ -64,7 +77,7 @@ function MappaPublic({ wr, selected, onSelect, lavorazioni }) {
     const lon = parseFloat(selected.Longitudine) || parseFloat(selected.LonInferita);
     if (lat && lon) {
       mapInstanceRef.current.setView([lat, lon], 14, { animate: true });
-      setTimeout(() => markersRef.current[String(selected.WR)]?.openPopup(), 400);
+      setTimeout(() => markersRef.current[String(selected.WR)]?.fire('click'), 400);
     }
   }, [selected]);
 

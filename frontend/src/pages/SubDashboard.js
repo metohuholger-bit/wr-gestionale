@@ -283,6 +283,7 @@ function MappaSub({ wr, onClose, API, user, subCode, onSquadraCreata, miniSquadr
           ${isInferred ? '<br/><span style="color:#f59e0b">⚠ Posizione approssimativa — clicca per correggere</span>' : ''}
           ${w.CoordCorretta ? '<br/><span style="color:#22c55e">✓ Posizione corretta</span>' : ''}
           ${sovrapposto ? '<br/><span style="color:#94a3b8">📍 Stesso punto di altra WR</span>' : ''}
+<br/><a href="https://www.google.com/maps/dir/?api=1&destination=${latOrig},${lonOrig}" target="_blank" style="color:#22c55e;font-size:11px;text-decoration:none">📍 Indicazioni stradali</a>
           ${isInferred ? `<br/><button onclick="window._correggiWR('${w.WR}', this)" style="margin-top:6px;background:rgba(245,158,11,0.2);border:1px solid #f59e0b;color:#f59e0b;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px">✏️ Correggi posizione</button>` : ''}
         </div>`);
         if (isInferred) {
